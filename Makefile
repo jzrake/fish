@@ -10,10 +10,13 @@ FISHLIB_INSTALL ?= $(PREFIX)
 
 default : clib
 
-all : clib
+all : clib pyfish
 
 clib : 
 	@make -C src
+
+pyfish : clib
+	@make -C pyfish
 
 install : clib
 	mkdir -p $(FISHLIB_INSTALL)/include; cp include/* $(FISHLIB_INSTALL)/include
@@ -22,4 +25,5 @@ install : clib
 
 clean :
 	@make -C src clean
+	@make -C pyfish clean
 	@rm -rf lib bin include
