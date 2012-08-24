@@ -5,11 +5,16 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 
 FLUIDS_INC = "/Users/jzrake/Work/fluids/include"
+PYFLUIDS_INC = "/Users/jzrake/Work/fluids/pyfluids"
+
 fluids = Extension("fish",
                    sources = ["fish.pyx"],
                    library_dirs = ['../lib'],
                    libraries = ['fish'],
-                   include_dirs=["../include", FLUIDS_INC, np.get_include()])
+                   include_dirs=["../include",
+                                 FLUIDS_INC,
+                                 PYFLUIDS_INC,
+                                 np.get_include()])
 
 setup(cmdclass = {'build_ext': build_ext},
       ext_modules = [fluids])
