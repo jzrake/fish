@@ -28,5 +28,4 @@ cdef class FishSolver(object):
 
 
 cdef class FluidStateVector(object):
-    cdef int _N
-    cdef fluid_state **_c
+    cdef np.ndarray _states
