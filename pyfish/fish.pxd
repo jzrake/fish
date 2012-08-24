@@ -1,6 +1,8 @@
 
-cdef extern from "fluids.h":
-    struct fluid_state
+from pyfluids.fluids cimport *
+cimport fish
+cimport numpy as np
+import numpy as np
 
 cdef extern from "fish.h":
     cdef int FISH_NONE           =   -42
@@ -20,6 +22,11 @@ cdef extern from "fish.h":
     int fish_setreconstruction(fish_state *S, int reconstruction)
     int fish_setplmtheta(fish_state *S, double plmtheta)
 
-cdef class FishState(object):
+
+cdef class FishSolver(object):
     cdef fish_state *_c
 
+
+cdef class FluidStateVector(object):
+    cdef int _N
+    cdef fluid_state **_c
