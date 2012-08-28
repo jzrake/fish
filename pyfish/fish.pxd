@@ -25,7 +25,3 @@ cdef extern from "fish.h":
 
 cdef class FishSolver(object):
     cdef fish_state *_c
-
-
-cdef class FluidStateVector(object):
-    cdef np.ndarray _states
