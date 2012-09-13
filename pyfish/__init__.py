@@ -1,3 +1,2 @@
 
-
-from fish import *
+from fish import FishSolver

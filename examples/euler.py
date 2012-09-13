@@ -5,20 +5,26 @@ import pyfish
 
 N = 100
 dx = 1.0 / N
+ng = 3
+
+def set_boundary(U):
+    U[:+ng] = U[+(ng+0)]
+    U[-ng:] = U[-(ng+1)]
 
 def dUdt(fluid):
     solver = pyfish.FishSolver()
+    solver.reconstruction = "weno5"
     Fiph = solver.intercellflux(fluid._states)
     L = -(Fiph - np.roll(Fiph, 1, axis=0)) / dx
-    L[:+2] = 0.0
-    L[-2:] = 0.0
     return L
 
 def advance(fluid, dt):
     U0 = fluid.get_conserved()
     U1 = U0 + 0.5 * dt * dUdt(fluid)
+    set_boundary(U1)
     fluid.set_conserved(U1)
     U1 = U0 + 1.0 * dt * dUdt(fluid)
+    set_boundary(U1)
     fluid.set_conserved(U1)
 
 
