@@ -77,22 +77,23 @@ def advance_midpoint(fluid, solver, dt):
 
 
 t = 0.0
-dt = 0.0025
+dt = 0.005
 
-P = np.zeros([N,N,5])
-X, Y = np.mgrid[-0.5:0.5:dx,-0.5:0.5:dx]
-P[np.where(X**2 + Y**2 >= 0.05)] = [0.1, 0.125, 0.0, 0.0, 0.0]
-P[np.where(X**2 + Y**2 <  0.05)] = [1.0, 1.000, 0.0, 0.0, 0.0]
+P = np.zeros([N,N,N,5])
+X, Y, Z = np.mgrid[-0.5:0.5:dx,-0.5:0.5:dx,-0.5:0.5:dx]
+
+P[np.where(X**2 + Y**2 + Z**2 >= 0.05)] = [0.1, 0.125, 0.0, 0.0, 0.0]
+P[np.where(X**2 + Y**2 + Z**2 <  0.05)] = [1.0, 1.000, 0.0, 0.0, 0.0]
 
 solver = pyfish.FishSolver()
 solver.reconstruction = "weno5"
 solver.riemannsolver = "hllc"
 
-fluid = pyfluids.FluidStateVector([N,N])
+fluid = pyfluids.FluidStateVector([N,N,N])
 fluid.set_primitive(P)
 
-set_boundary = set_boundary2d
-dUdt = dUdt2d
+set_boundary = set_boundary3d
+dUdt = dUdt3d
 advance = advance_midpoint
 
 def main():
@@ -109,7 +110,12 @@ def main():
 
 def plot():
     import matplotlib.pyplot as plt
-    plt.imshow(fluid.get_primitive()[:,:,0], interpolation='nearest')
+    ax1 = plt.figure().add_subplot(111)
+    ax2 = plt.figure().add_subplot(111)
+    ax3 = plt.figure().add_subplot(111)
+    ax1.imshow(fluid.get_primitive()[N/2,:,:,0], interpolation='nearest')
+    ax2.imshow(fluid.get_primitive()[:,N/2,:,0], interpolation='nearest')
+    ax3.imshow(fluid.get_primitive()[:,:,N/2,0], interpolation='nearest')
     plt.show()
 
 

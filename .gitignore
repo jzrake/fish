@@ -6,3 +6,5 @@
 /setup.sh
 /src/fish.o
 /src/testfish.o
+/src/euler.o
+/src/weno.o
