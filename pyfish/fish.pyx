@@ -1,6 +1,6 @@
 
-cimport fish
-cimport fluids
+cimport pyfish.fish as fish
+cimport pyfluids.fluids as fluids
 cimport numpy as np
 import numpy as np
 from libc.stdlib cimport malloc, free

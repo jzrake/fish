@@ -1,2 +1,2 @@
 
-from fish import FishSolver
+from pyfish.fish import FishSolver
