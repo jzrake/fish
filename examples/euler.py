@@ -59,25 +59,14 @@ class MaraEvolutionOperator(object):
     def min_grid_spacing(self):
         return min([self.dx, self.dy, self.dz][:len(self.shape)])
 
-    def initial_model(self):
+    def initial_model(self, pinit):
         shape = self.shape
-        P = np.zeros(tuple(shape) + (5,))
         Nx, Ny, Nz = self.Nx, self.Ny, self.Nz
         dx, dy, dz = self.dx, self.dy, self.dz
-        if len(shape) == 1:
-            Nx = self.fluid._states.shape[0]
-            X = np.mgrid[-0.5:0.5:dx]
-            P[np.where(X**2 >= 0.05)] = [0.1, 0.125, 0.0, 0.0, 0.0]
-            P[np.where(X**2 <  0.05)] = [1.0, 1.000, 0.0, 0.0, 0.0]
-        if len(shape) == 2:
-            X, Y = np.mgrid[-0.5:0.5:dx,-0.5:0.5:dy]
-            P[np.where(X**2 + Y**2 >= 0.05)] = [0.1, 0.125, 0.0, 0.0, 0.0]
-            P[np.where(X**2 + Y**2 <  0.05)] = [1.0, 1.000, 0.0, 0.0, 0.0]
-        if len(shape) == 3:
-            X, Y, Z = np.mgrid[-0.5:0.5:dx,-0.5:0.5:dy,-0.5:0.5:dz]
-            P[np.where(X**2 + Y**2 + Z**2 >= 0.05)] = [0.1, 0.125, 0.0, 0.0, 0.0]
-            P[np.where(X**2 + Y**2 + Z**2 <  0.05)] = [1.0, 1.000, 0.0, 0.0, 0.0]
-        self.fluid.set_primitive(P)
+        X, Y, Z = np.mgrid[-0.5+dx/2:0.5+dx/2:dx,-0.5+dy/2:0.5+dy/2:dy,
+                            -0.5+dz/2:0.5+dz/2:dz]
+        P = np.array([pinit(x, y, z) for x, y, z in zip(X.flat, Y.flat, Z.flat)])
+        self.fluid.set_primitive(P.reshape(shape + (5,)))
 
     def advance(self, dt, rk=3):
         U0 = self.fluid.get_conserved()
@@ -108,6 +97,7 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
+        self.boundary.set_boundary(U1)
         self.fluid.set_conserved(U1)
 
     def dUdt(self, U):
@@ -120,9 +110,8 @@ class MaraEvolutionOperator(object):
         Nx = self.fluid._states.shape[0]
         dx = 1.0/Nx
         L = np.zeros([Nx,5])
-        for j in range(Ny):
-            Fiph = solver.intercellflux(fluid._states[:,j], dim=0)
-            L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
+        Fiph = solver.intercellflux(fluid._states, dim=0)
+        L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
         return L
 
     def _dUdt2d(self, fluid, solver):
@@ -157,11 +146,21 @@ class MaraEvolutionOperator(object):
 
 
 def main():
+    def explosion(x, y, z):
+        if (x**2 + y**2 + z**2) > 0.05:
+            return [0.125, 0.100, 0.0, 0.0, 0.0]
+        else:
+            return [1.000, 1.000, 0.0, 0.0, 0.0]
+    def brio_wu(x, y, z):
+        if x > 0.0:
+            return [0.125, 0.100, 0.0, 0.0, 0.0]
+        else:
+            return [1.000, 1.000, 0.0, 0.0, 0.0]
     iter = 0
     tcur = 0.0
     CFL = 0.5
-    mara = MaraEvolutionOperator([32,32,32])
-    mara.initial_model()
+    mara = MaraEvolutionOperator([32, 32, 32])
+    mara.initial_model(explosion)
     while tcur < 0.025:
         ml = abs(np.array([f.eigenvalues() for f in mara.fluid._states.flat])).max()
         dt = CFL * mara.min_grid_spacing() / ml
@@ -179,19 +178,25 @@ def main():
 
 def plot(mara):
     import matplotlib.pyplot as plt
-    Nx, Ny, Nz = mara.Nx, mara.Ny, mara.Nz
-    ax1 = plt.figure().add_subplot(111)
-    ax2 = plt.figure().add_subplot(111)
-    ax3 = plt.figure().add_subplot(111)
-    ax1.imshow(mara.fluid.get_primitive()[Nx/2,:,:,0], interpolation='nearest')
-    ax2.imshow(mara.fluid.get_primitive()[:,Ny/2,:,0], interpolation='nearest')
-    ax3.imshow(mara.fluid.get_primitive()[:,:,Nz/2,0], interpolation='nearest')
+    if len(mara.shape) == 1:
+        plt.plot(mara.fluid.get_primitive())
+    if len(mara.shape) == 2:
+        plt.imshow(mara.fluid.get_primitive()[:,:,0], interpolation='nearest')
+        plt.show()
+    if len(mara.shape) == 3:
+        Nx, Ny, Nz = mara.Nx, mara.Ny, mara.Nz
+        ax1 = plt.figure().add_subplot(111)
+        ax2 = plt.figure().add_subplot(111)
+        ax3 = plt.figure().add_subplot(111)
+        ax1.imshow(mara.fluid.get_primitive()[Nx/2,:,:,0], interpolation='nearest')
+        ax2.imshow(mara.fluid.get_primitive()[:,Ny/2,:,0], interpolation='nearest')
+        ax3.imshow(mara.fluid.get_primitive()[:,:,Nz/2,0], interpolation='nearest')
     plt.show()
 
 
 if __name__ == "__main__":
-    cProfile.run('main()', 'mara_pstats')
-    p = pstats.Stats('mara_pstats')
-    p.sort_stats('time').print_stats(10)
-    #mara = main()
-    #plot(mara)
+    #cProfile.run('main()', 'mara_pstats')
+    #p = pstats.Stats('mara_pstats')
+    #p.sort_stats('time').print_stats(10)
+    mara = main()
+    plot(mara)
