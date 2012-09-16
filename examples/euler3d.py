@@ -1,5 +1,7 @@
 
 import time
+import cProfile
+import pstats
 import numpy as np
 import pyfluids
 import pyfish
@@ -75,6 +77,21 @@ def advance_midpoint(fluid, solver, dt):
     set_boundary(U1)
     fluid.set_conserved(U1)
 
+def advance_shuosher_rk3(fluid, solver, dt):
+    U0 = fluid.get_conserved()
+
+    U1 =      U0 +                  dt * dUdt(fluid, solver)
+    set_boundary(U1)
+    fluid.set_conserved(U1)
+
+    U1 = 3./4*U0 + 1./4*U1 + 1./4 * dt * dUdt(fluid, solver)
+    set_boundary(U1)
+    fluid.set_conserved(U1)
+
+    U1 = 1./3*U0 + 2./3*U1 + 2./3 * dt * dUdt(fluid, solver)
+    set_boundary(U1)
+    fluid.set_conserved(U1)
+
 
 t = 0.0
 dt = 0.005
@@ -94,7 +111,7 @@ fluid.set_primitive(P)
 
 set_boundary = set_boundary3d
 dUdt = dUdt3d
-advance = advance_midpoint
+advance = advance_shuosher_rk3
 
 def main():
     iter = 0
@@ -120,7 +137,8 @@ def plot():
 
 
 if __name__ == "__main__":
-    import cProfile
-    #cProfile.run('main()')
-    main()
-    plot()
+    cProfile.run('main()', 'mara_pstats')
+    p = pstats.Stats('mara_pstats')
+    p.sort_stats('time').print_stats(10)
+    #main()
+    #plot()
