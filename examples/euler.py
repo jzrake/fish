@@ -41,7 +41,7 @@ class SelfGravitySourceTerms(object):
     def __init__(self, G=1.0):
         self.G = G
 
-    def get_source_terms(self, mara, retphi=False):
+    def source_terms(self, mara, retphi=False):
         from numpy.fft import fftfreq, fftn, ifftn
         ng = mara.number_guard_zones()
         G = self.G
@@ -67,6 +67,7 @@ class SelfGravitySourceTerms(object):
         fx = ifftn(1.j * K[0] * phihat).real
         fy = ifftn(1.j * K[1] * phihat).real
         fz = ifftn(1.j * K[2] * phihat).real
+
         S = np.zeros(mara.fluid._states.shape + (5,))
         S[ng:-ng,ng:-ng,ng:-ng,0] = 0.0
         S[ng:-ng,ng:-ng,ng:-ng,1] = rho * (fx*vx + fy*vy + fz*vz)
@@ -81,7 +82,7 @@ class StaticCentralGravity(object):
         self.G = G
         self.M = M
 
-    def get_source_terms(self, mara, retphi=False):
+    def source_terms(self, mara, retphi=False):
         G = self.G
         M = self.M
 
@@ -112,15 +113,45 @@ class StaticCentralGravity(object):
         return (S, phi) if retphi else S
 
 
+class SafetyModule(object):
+    def __init__(self):
+        pass
+
+    def check_conserved(self, U, repair=True):
+        if (U[...,0] < 0.0).any():
+            raise RuntimeError("negative density")
+        if (U[...,1] < 0.0).any():
+            if repair:
+                I = np.where(U[...,1] < 0.0)
+                U[...,1][I] = 1e-3
+                print "applied energy floor to %d zones" % len(I[0])
+                return U
+            else:
+                raise RuntimeError("negative energy")
+
+    def check_primitive(self, P, repair=True):
+        if (P[...,0] < 0.0).any():
+            raise RuntimeError("negative density")
+        if (P[...,1] < 0.0).any():
+            if repair:
+                I = np.where(P[...,1] < 0.0)
+                P[...,1][I] = 1e-3
+                print "applied pressure floor to %d zones" % len(I[0])
+                return P
+            else:
+                raise RuntimeError("negative pressure")
+
+
 class MaraEvolutionOperator(object):
     def __init__(self, shape, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         self.solver = pyfish.FishSolver()
         self.boundary = Outflow(self)
         self.fluid = pyfluids.FluidStateVector(shape)
         self.sources = None
+        self.safety = SafetyModule()
 
-        self.solver.reconstruction = "none"
-        self.solver.riemannsolver = "hll"
+        self.solver.reconstruction = "plm"
+        self.solver.riemannsolver = "hllc"
         self.shape = tuple(shape)
 
         for s in self.fluid._states.flat:
@@ -200,15 +231,30 @@ class MaraEvolutionOperator(object):
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
         self.boundary.set_boundary(U1)
+        self.safety.check_conserved(U1, repair=True)
         self.fluid.set_conserved(U1)
 
     def dUdt(self, U):
         assert U.shape[:-1] == self.shape
+
+        P0 = self.fluid.get_primitive() # backup primitive
         self.boundary.set_boundary(U)
-        self.fluid.set_conserved(U)
+
+        U_ = self.safety.check_conserved(U, repair=True)
+        self.fluid.set_conserved(U_ if U_ is not None else U)
+        P1 = self.fluid.get_primitive() # new primitive
+
+        try:
+            P_ = self.safety.check_primitive(P1, repair=True)
+            if P_ is not None:
+                self.fluid.set_primitive(P_)
+        except Exception as e:
+            self.fluid.set_primitive(P0) # replace old primitive
+            raise e
+
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
         if self.sources:
-            L += self.sources.get_source_terms(self)
+            L += self.sources.source_terms(self)
         return L
 
     def _dUdt1d(self, fluid, solver):
@@ -264,11 +310,11 @@ def brio_wu(x, y, z):
         return [1.000, 1.000, 0.0, 0.0, 0.0]
 
 
-def polytrope2(x, y, z):
+def polytrope(x, y, z):
     rho_c = 1.0    # central density
-    rho_f = 1.0e-2 # floor (atmospheric) density
+    rho_f = 1.0e-1 # floor (atmospheric) density
     G = 1.0        # gravitational constant
-    a = 0.05       # alpha, stellar radius
+    a = 0.025      # alpha, stellar radius
     n = 1.0        # polytropic index
     K = 4*np.pi*G * a**2 / ((n + 1) * rho_c**(1.0/n - 1.0))
     r = (x**2 + y**2 + z**2)**0.5 / a
@@ -285,7 +331,7 @@ def polytrope2(x, y, z):
 def central_mass(x, y, z):
     rho_c = 1.0    # central density
     rho_f = 1.0e-2 # floor (atmospheric) density
-    a = 0.05       # alpha, stellar radius
+    a = 0.3        # alpha, stellar radius
     r = (x**2 + y**2 + z**2)**0.5 / a
     if r < 0.5:
         rho = rho_c
@@ -300,13 +346,14 @@ def main():
     tcur = 0.0
     CFL = 0.3
     mara = MaraEvolutionOperator([32, 32, 32], X0=[-0.5, -0.5, -0.5], X1=[0.5, 0.5, 0.5])
-    #mara.sources = SelfGravitySourceTerms()
-    mara.sources = StaticCentralGravity(M=1.0)
-    #mara.initial_model(polytrope2)
-    mara.initial_model(central_mass)
+    mara.sources = SelfGravitySourceTerms()
+    #mara.sources = StaticCentralGravity(M=0.1)
+    mara.initial_model(polytrope)
+    #mara.initial_model(central_mass)
     measlog = { }
-    while tcur < 0.1:
-        ml = abs(np.array([f.eigenvalues() for f in mara.fluid._states.flat])).max()
+    while tcur < 1.5:
+        ml = abs(np.array(
+                [f.eigenvalues() for f in mara.fluid._states.flat])).max()
         dt = CFL * mara.min_grid_spacing() / ml
         start = time.clock()
         mara.advance(dt, rk=3)
@@ -345,7 +392,7 @@ def plot(mara, measlog):
     if len(mara.shape) == 3:
         Nx, Ny, Nz = mara.Nx, mara.Ny, mara.Nz
         plot3dslices(mara.fluid.get_primitive()[...,0])
-        S, phi = mara.sources.get_source_terms(mara, retphi=True)
+        S, phi = mara.sources.source_terms(mara, retphi=True)
         plot3dslices(phi)
 
     ax = plt.figure().add_subplot(111)
