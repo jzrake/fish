@@ -1,7 +1,8 @@
 
 import time
-import cProfile
 import pstats
+import cProfile
+import cPickle
 import numpy as np
 import pyfluids
 import pyfish
@@ -9,26 +10,26 @@ import pyfish
 AdiabaticGamma = 2.0
 
 class Outflow(object):
-    def __init__(self, mara):
-        self.mara = mara
+    def __init__(self):
+        pass
 
-    def set_boundary(self, U):
-        getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(U)
+    def set_boundary(self, mara, U):
+        getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(mara, U)
 
-    def set_boundary1d(self, U):
-        ng = self.mara.number_guard_zones()
+    def set_boundary1d(self, mara, U):
+        ng = mara.number_guard_zones()
         U[:+ng] = U[+(ng+0)]
         U[-ng:] = U[-(ng+1)]
 
-    def set_boundary2d(self, U):
-        ng = self.mara.number_guard_zones()
+    def set_boundary2d(self, mara, U):
+        ng = mara.number_guard_zones()
         U[:,:+ng] = U[:,+(ng+0)][:,np.newaxis,:]
         U[:,-ng:] = U[:,-(ng+1)][:,np.newaxis,:]
         U[:+ng,:] = U[+(ng+0),:][np.newaxis,:,:]
         U[-ng:,:] = U[-(ng+1),:][np.newaxis,:,:]
 
-    def set_boundary3d(self, U):
-        ng = self.mara.number_guard_zones()
+    def set_boundary3d(self, mara, U):
+        ng = mara.number_guard_zones()
         U[:,:,:+ng] = U[:,:,+(ng+0)][:,:,np.newaxis,:]
         U[:,:,-ng:] = U[:,:,-(ng+1)][:,:,np.newaxis,:]
         U[:,:+ng,:] = U[:,+(ng+0),:][:,np.newaxis,:,:]
@@ -64,9 +65,9 @@ class SelfGravitySourceTerms(object):
 
         rhohat = fftn(rho)
         phihat = (4*np.pi*G) * rhohat / delsq
-        fx = ifftn(1.j * K[0] * phihat).real
-        fy = ifftn(1.j * K[1] * phihat).real
-        fz = ifftn(1.j * K[2] * phihat).real
+        fx = -ifftn(1.j * K[0] * phihat).real
+        fy = -ifftn(1.j * K[1] * phihat).real
+        fz = -ifftn(1.j * K[2] * phihat).real
 
         S = np.zeros(mara.fluid._states.shape + (5,))
         S[ng:-ng,ng:-ng,ng:-ng,0] = 0.0
@@ -75,6 +76,55 @@ class SelfGravitySourceTerms(object):
         S[ng:-ng,ng:-ng,ng:-ng,3] = rho * fy
         S[ng:-ng,ng:-ng,ng:-ng,4] = rho * fz
         return (S, ifftn(phihat).real) if retphi else S
+
+
+class EnclosedMassMonopoleGravity(object):
+    def __init__(self, G=1.0):
+        self.G = G
+
+    def source_terms(self, mara, retphi=False):
+        from scipy.interpolate import interp1d
+
+        G = self.G
+        X, Y, Z = mara.coordinate_grid()
+        r2 = X**2 + Y**2 + Z**2
+        r = r2**0.5
+
+        P = mara.fluid.get_primitive()
+        rho = P[...,0]
+        vx = P[...,2]
+        vy = P[...,3]
+        vz = P[...,4]
+
+        dV = mara.dx * mara.dy * mara.dz
+        renc = np.linspace(0.0, 1.0, 10)
+        Menc = [ ]
+
+        for r0 in renc:
+            Menc.append(rho[r < r0].sum() * dV)
+
+        Menc_f = interp1d(renc, Menc, kind='cubic')
+        Menc_i = Menc_f(r)
+
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(np.linspace(0.0, 1.0, 100),
+                 [Menc_f(r0) for r0 in np.linspace(0.0, 1.0, 100)], '-o')
+        plt.show()
+        """
+
+        rhatx, rhaty, rhatz = X/r, Y/r, Z/r
+        fx = -G * Menc_i * rhatx / r2
+        fy = -G * Menc_i * rhaty / r2
+        fz = -G * Menc_i * rhatz / r2
+
+        S = np.zeros(mara.fluid._states.shape + (5,))
+        S[...,0] = 0.0
+        S[...,1] = rho * (fx*vx + fy*vy + fz*vz)
+        S[...,2] = rho * fx
+        S[...,3] = rho * fy
+        S[...,4] = rho * fz
+        return S
 
 
 class StaticCentralGravity(object):
@@ -117,41 +167,35 @@ class SafetyModule(object):
     def __init__(self):
         pass
 
-    def check_conserved(self, U, repair=True):
-        if (U[...,0] < 0.0).any():
-            raise RuntimeError("negative density")
-        if (U[...,1] < 0.0).any():
-            if repair:
-                I = np.where(U[...,1] < 0.0)
-                U[...,1][I] = 1e-3
-                print "applied energy floor to %d zones" % len(I[0])
-                return U
-            else:
-                raise RuntimeError("negative energy")
-
-    def check_primitive(self, P, repair=True):
+    def validate(self, fluid, repair=True):
+        P = fluid.get_primitive()
         if (P[...,0] < 0.0).any():
-            raise RuntimeError("negative density")
+            if repair:
+                I = np.where(P[...,1] < 0.0)
+                P[...,0][I] = 1e-3
+                print "applied density floor to %d zones" % len(I[0])
+            else:
+                raise RuntimeError("negative density")
         if (P[...,1] < 0.0).any():
             if repair:
                 I = np.where(P[...,1] < 0.0)
                 P[...,1][I] = 1e-3
                 print "applied pressure floor to %d zones" % len(I[0])
-                return P
             else:
                 raise RuntimeError("negative pressure")
+        fluid.set_primitive(P)
 
 
 class MaraEvolutionOperator(object):
     def __init__(self, shape, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         self.solver = pyfish.FishSolver()
-        self.boundary = Outflow(self)
+        self.boundary = Outflow()
         self.fluid = pyfluids.FluidStateVector(shape)
         self.sources = None
         self.safety = SafetyModule()
 
         self.solver.reconstruction = "plm"
-        self.solver.riemannsolver = "hllc"
+        self.solver.riemannsolver = "hll"
         self.shape = tuple(shape)
 
         for s in self.fluid._states.flat:
@@ -230,36 +274,34 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
-        self.boundary.set_boundary(U1)
-        self.safety.check_conserved(U1, repair=True)
+        self.boundary.set_boundary(self, U1)
         self.fluid.set_conserved(U1)
+        self.safety.validate(self.fluid, repair=True)
 
     def dUdt(self, U):
-        assert U.shape[:-1] == self.shape
-
-        P0 = self.fluid.get_primitive() # backup primitive
-        self.boundary.set_boundary(U)
-
-        U_ = self.safety.check_conserved(U, repair=True)
-        self.fluid.set_conserved(U_ if U_ is not None else U)
-        P1 = self.fluid.get_primitive() # new primitive
-
-        try:
-            P_ = self.safety.check_primitive(P1, repair=True)
-            if P_ is not None:
-                self.fluid.set_primitive(P_)
-        except Exception as e:
-            self.fluid.set_primitive(P0) # replace old primitive
-            raise e
-
+        self.boundary.set_boundary(self, U)
+        self.fluid.set_conserved(U)
+        self.safety.validate(self.fluid, repair=True)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
+
+        """
+        import matplotlib.pyplot as plt
+        S = self.sources.source_terms(self)
+        LSz = L[16,16,:,4]
+        SSz = S[16,16,:,4]
+        plt.plot(SSz, '-o', label='S')
+        plt.plot(LSz, '-x', label='L')
+        plt.legend()
+        plt.show()
+        """
+
         if self.sources:
             L += self.sources.source_terms(self)
         return L
 
     def _dUdt1d(self, fluid, solver):
-        Nx = self.fluid._states.shape[0]
-        dx = 1.0/Nx
+        Nx, = self.fluid._states.shape
+        dx, = 1.0/Nx,
         L = np.zeros([Nx,5])
         Fiph = solver.intercellflux(fluid._states, dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
@@ -301,7 +343,7 @@ def explosion(x, y, z):
         return [0.125, 0.100, 0.0, 0.0, 0.0]
     else:
         return [1.000, 1.000, 0.0, 0.0, 0.0]
-
+    
 
 def brio_wu(x, y, z):
     if x > 0.0:
@@ -312,9 +354,10 @@ def brio_wu(x, y, z):
 
 def polytrope(x, y, z):
     rho_c = 1.0    # central density
-    rho_f = 1.0e-1 # floor (atmospheric) density
+    rho_f = 1.0e-3 # floor (atmospheric) density
     G = 1.0        # gravitational constant
-    a = 0.025      # alpha, stellar radius
+    b = 0.3        # beta, stellar radius
+    a = b / np.pi  # alpha
     n = 1.0        # polytropic index
     K = 4*np.pi*G * a**2 / ((n + 1) * rho_c**(1.0/n - 1.0))
     r = (x**2 + y**2 + z**2)**0.5 / a
@@ -345,13 +388,28 @@ def main():
     iter = 0
     tcur = 0.0
     CFL = 0.3
-    mara = MaraEvolutionOperator([32, 32, 32], X0=[-0.5, -0.5, -0.5], X1=[0.5, 0.5, 0.5])
+    mara = MaraEvolutionOperator([32,32,32], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
     mara.sources = SelfGravitySourceTerms()
+    #mara.sources = EnclosedMassMonopoleGravity()
     #mara.sources = StaticCentralGravity(M=0.1)
     mara.initial_model(polytrope)
     #mara.initial_model(central_mass)
+
     measlog = { }
-    while tcur < 1.5:
+    measlog_file = "measure.pk"
+    chkpt_number = 0
+    chkpt_last = 0.0
+    chkpt_interval = 0.1
+
+    while tcur < 15:
+
+        if tcur - chkpt_last > chkpt_interval:
+            chkpt_last = tcur
+            chkpt_number += 1
+            chkpt_name = "chkpt.%04d.np" % chkpt_number
+            mara.fluid.get_primitive().dump(chkpt_name)
+            print "writing checkpoint", chkpt_name
+
         ml = abs(np.array(
                 [f.eigenvalues() for f in mara.fluid._states.flat])).max()
         dt = CFL * mara.min_grid_spacing() / ml
@@ -366,6 +424,9 @@ def main():
             (wall_step / (mara.fluid._states.size*5)) * 1e6)
         measlog[iter] = mara.measure()
         measlog[iter]["time"] = tcur
+
+        cPickle.dump(measlog, open(measlog_file, "w"))
+
     return mara, measlog
 
 
@@ -407,3 +468,38 @@ if __name__ == "__main__":
     #p.sort_stats('time').print_stats(10)
     mara, measlog = main()
     plot(mara, measlog)
+
+
+
+
+
+
+"""
+class SafetyModule(object):
+    def __init__(self):
+        pass
+
+    def check_conserved(self, U, repair=True):
+        if (U[...,0] < 0.0).any():
+            raise RuntimeError("negative density")
+        if (U[...,1] < 0.0).any():
+            if repair:
+                I = np.where(U[...,1] < 0.0)
+                U[...,1][I] = 1e-3
+                print "applied energy floor to %d zones" % len(I[0])
+                return U
+            else:
+                raise RuntimeError("negative energy")
+
+    def check_primitive(self, P, repair=True):
+        if (P[...,0] < 0.0).any():
+            raise RuntimeError("negative density")
+        if (P[...,1] < 0.0).any():
+            if repair:
+                I = np.where(P[...,1] < 0.0)
+                P[...,1][I] = 1e-3
+                print "applied pressure floor to %d zones" % len(I[0])
+                return P
+            else:
+                raise RuntimeError("negative pressure")
+"""
