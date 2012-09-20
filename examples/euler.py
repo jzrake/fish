@@ -1,4 +1,5 @@
 
+import os
 import time
 import pstats
 import cProfile
@@ -212,6 +213,22 @@ class MaraEvolutionOperator(object):
         self.dx, self.dy, self.dz = dx, dy, dz
         self.X0, self.X1 = X0, X1
 
+    def write_checkpoint(self, status, dir=".", update_status=True, **extras):        
+        if update_status:
+            status.chkpt_last = status.time_current
+            status.chkpt_number += 1
+        try:
+            os.makedirs(dir)
+            print "creating data directory", dir
+        except OSError: # File exists
+            pass
+        chkpt = { "prim": self.fluid.get_primitive(), "status": status.__dict__ }
+        chkpt.update(extras)
+        chkpt_name = "%s/chkpt.%04d.pk" % (dir, status.chkpt_number)
+        chkpt_file = open(chkpt_name, 'w')
+        print "Writing checkpoint", chkpt_name
+        cPickle.dump(chkpt, chkpt_file)
+
     def measure(self):
         meas = { }
         P = self.fluid.get_primitive()
@@ -246,6 +263,7 @@ class MaraEvolutionOperator(object):
         self.fluid.set_primitive(P)
 
     def advance(self, dt, rk=3):
+        start = time.clock()
         U0 = self.fluid.get_conserved()
         if rk == 1:
             """
@@ -277,6 +295,7 @@ class MaraEvolutionOperator(object):
         self.boundary.set_boundary(self, U1)
         self.fluid.set_conserved(U1)
         self.safety.validate(self.fluid, repair=True)
+        return time.clock() - start
 
     def dUdt(self, U):
         self.boundary.set_boundary(self, U)
@@ -343,7 +362,7 @@ def explosion(x, y, z):
         return [0.125, 0.100, 0.0, 0.0, 0.0]
     else:
         return [1.000, 1.000, 0.0, 0.0, 0.0]
-    
+
 
 def brio_wu(x, y, z):
     if x > 0.0:
@@ -384,10 +403,11 @@ def central_mass(x, y, z):
     return [rho, pre, 0.0, 0.0, 0.0]
 
 
+class SimulationStatus:
+    pass
+
+
 def main():
-    iter = 0
-    tcur = 0.0
-    CFL = 0.3
     mara = MaraEvolutionOperator([32,32,32], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
     mara.sources = SelfGravitySourceTerms()
     #mara.sources = EnclosedMassMonopoleGravity()
@@ -395,37 +415,40 @@ def main():
     mara.initial_model(polytrope)
     #mara.initial_model(central_mass)
 
-    measlog = { }
-    measlog_file = "measure.pk"
-    chkpt_number = 0
-    chkpt_last = 0.0
+    CFL = 0.3
     chkpt_interval = 0.1
 
-    while tcur < 15:
+    measlog = { }
+    status = SimulationStatus()
 
-        if tcur - chkpt_last > chkpt_interval:
-            chkpt_last = tcur
-            chkpt_number += 1
-            chkpt_name = "chkpt.%04d.np" % chkpt_number
-            mara.fluid.get_primitive().dump(chkpt_name)
-            print "writing checkpoint", chkpt_name
+    status.iteration = 0
+    status.time_step = 0.0
+    status.time_current = 0.0
+    status.chkpt_number = 0
+    status.chkpt_last = 0.0
+
+    while status.time_current < 15:
+
+        if status.time_current - status.chkpt_last > chkpt_interval:
+            mara.write_checkpoint(status, dir="data/test", update_status=True, measlog=measlog)
 
         ml = abs(np.array(
                 [f.eigenvalues() for f in mara.fluid._states.flat])).max()
+
         dt = CFL * mara.min_grid_spacing() / ml
-        start = time.clock()
-        mara.advance(dt, rk=3)
-        tcur += dt
-        iter += 1
-        wall_step = time.clock() - start
+        wall_step = mara.advance(dt, rk=3)
+
+        status.time_step = dt
+        status.time_current += status.time_step
+        status.iteration += 1
+
         print "%05d(%d): t=%5.4f dt=%5.4e %3.1fkz/s %3.2fus/(z*Nq)" % (
-            iter, 0, tcur, dt,
+            status.iteration, 0, status.time_current, dt,
             (mara.fluid._states.size / wall_step) * 1e-3,
             (wall_step / (mara.fluid._states.size*5)) * 1e6)
-        measlog[iter] = mara.measure()
-        measlog[iter]["time"] = tcur
 
-        cPickle.dump(measlog, open(measlog_file, "w"))
+        measlog[status.iteration] = mara.measure()
+        measlog[status.iteration]["time"] = status.time_current
 
     return mara, measlog
 
@@ -468,38 +491,3 @@ if __name__ == "__main__":
     #p.sort_stats('time').print_stats(10)
     mara, measlog = main()
     plot(mara, measlog)
-
-
-
-
-
-
-"""
-class SafetyModule(object):
-    def __init__(self):
-        pass
-
-    def check_conserved(self, U, repair=True):
-        if (U[...,0] < 0.0).any():
-            raise RuntimeError("negative density")
-        if (U[...,1] < 0.0).any():
-            if repair:
-                I = np.where(U[...,1] < 0.0)
-                U[...,1][I] = 1e-3
-                print "applied energy floor to %d zones" % len(I[0])
-                return U
-            else:
-                raise RuntimeError("negative energy")
-
-    def check_primitive(self, P, repair=True):
-        if (P[...,0] < 0.0).any():
-            raise RuntimeError("negative density")
-        if (P[...,1] < 0.0).any():
-            if repair:
-                I = np.where(P[...,1] < 0.0)
-                P[...,1][I] = 1e-3
-                print "applied pressure floor to %d zones" % len(I[0])
-                return P
-            else:
-                raise RuntimeError("negative pressure")
-"""
