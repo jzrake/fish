@@ -1,4 +1,5 @@
 
+import sys
 import os
 import time
 import pstats
@@ -232,11 +233,16 @@ class MaraEvolutionOperator(object):
     def measure(self):
         meas = { }
         P = self.fluid.get_primitive()
+        U = self.fluid.get_conserved()
         rho = P[...,0]
         vx = P[...,2]
         vy = P[...,3]
         vz = P[...,4]
         meas["kinetic"] = (rho * (vx*vx + vy*vy + vz*vz)).mean()
+        meas["density_max"] = rho.max()
+        meas["density_min"] = rho.min()
+        meas["conserved_avg"] = [U[...,i].mean() for i in range(5)]
+        meas["primitive_avg"] = [P[...,i].mean() for i in range(5)]
         return meas
 
     def min_grid_spacing(self):
@@ -429,9 +435,6 @@ def main():
 
     while status.time_current < 15:
 
-        if status.time_current - status.chkpt_last > chkpt_interval:
-            mara.write_checkpoint(status, dir="data/test", update_status=True, measlog=measlog)
-
         ml = abs(np.array(
                 [f.eigenvalues() for f in mara.fluid._states.flat])).max()
 
@@ -442,13 +445,18 @@ def main():
         status.time_current += status.time_step
         status.iteration += 1
 
-        print "%05d(%d): t=%5.4f dt=%5.4e %3.1fkz/s %3.2fus/(z*Nq)" % (
+        status.message = "%05d(%d): t=%5.4f dt=%5.4e %3.1fkz/s %3.2fus/(z*Nq)" % (
             status.iteration, 0, status.time_current, dt,
             (mara.fluid._states.size / wall_step) * 1e-3,
             (wall_step / (mara.fluid._states.size*5)) * 1e6)
 
+        if status.time_current - status.chkpt_last > chkpt_interval:
+            mara.write_checkpoint(status, dir="data/test", update_status=True, measlog=measlog)
+
         measlog[status.iteration] = mara.measure()
         measlog[status.iteration]["time"] = status.time_current
+        measlog[status.iteration]["message"] = status.message
+        print status.message
 
     return mara, measlog
 
