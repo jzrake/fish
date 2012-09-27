@@ -6,9 +6,9 @@ descr = pyfluids.FluidDescriptor()
 solver = pyfish.FishSolver()
 fluid = pyfluids.FluidStateVector([10,10], descr)
 
-P = fluid.primitive
+P = fluid.get_primitive()
 P[...] = 1.0
-fluid.primitive = P
+fluid.set_primitive(P)
 
 Fiph = solver.intercellflux(fluid[0,:])
 print Fiph
