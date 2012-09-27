@@ -8,3 +8,7 @@
 /src/testfish.o
 /src/euler.o
 /src/weno.o
+
+*.np
+*.png
+*.pk

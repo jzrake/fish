@@ -15,7 +15,7 @@ cdef extern from "fish.h":
     int fish_del(fish_state *S)
 
     int fish_evolve(fish_state *S, double dt)
-    int fish_intercellflux(fish_state *S, fluid_state **fluid, double *F, int N,
+    int fish_intercellflux(fish_state *S, fluids_state **fluid, double *F, int N,
                            int dim)
     int fish_setfluid(fish_state *S, int fluid)
     int fish_setriemannsolver(fish_state *S, int riemannsolver)

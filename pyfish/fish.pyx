@@ -27,19 +27,19 @@ cdef class FishSolver(object):
 
     def __init__(self):
         fish_setfluid(self._c, FLUIDS_NRHYD)
-        fish_setriemannsolver(self._c, FLUIDS_RIEMANN_EXACT)
-        fish_setreconstruction(self._c, FISH_PLM)
+        fish_setriemannsolver(self._c, FLUIDS_RIEMANN_HLL)
+        fish_setreconstruction(self._c, FISH_NONE)
         fish_setplmtheta(self._c, 2.0)
 
     def intercellflux(self, states, int dim=0):
-        cdef fluid_state **fluid = <fluid_state**>malloc(
-            states.size * sizeof(fluid_state*))
+        cdef fluids_state **fluid = <fluids_state**>malloc(
+            states.size * sizeof(fluids_state*))
         cdef int i
         cdef FluidState si
         for i in range(states.size):
             si = states[i]
             fluid[i] = si._c
-        cdef np.ndarray[np.double_t,ndim=2] Fiph = np.zeros((states.size, 5))
+        cdef np.ndarray[np.double_t,ndim=2] Fiph = np.zeros([states.size, 5])
         fish_intercellflux(self._c, fluid, <double*>Fiph.data, states.size, dim)
         free(fluid)
         return Fiph
