@@ -10,6 +10,7 @@ import pyfluids
 import pyfish
 
 AdiabaticGamma = 1.4
+FluidSystem = 'gravs'
 
 class Outflow(object):
     def __init__(self):
@@ -67,12 +68,12 @@ class MaraEvolutionOperator(object):
     def __init__(self, shape, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         self.solver = pyfish.FishSolver()
         self.boundary = Outflow()
-        self.fluid = pyfluids.FluidStateVector(shape, gamma=AdiabaticGamma)
+        self.fluid = pyfluids.FluidStateVector(shape, fluid=FluidSystem, gamma=AdiabaticGamma)
         self.sources = None
         self.safety = SafetyModule()
 
         self.solver.reconstruction = "plm"
-        self.solver.riemannsolver = "hll"
+        self.solver.riemannsolver = "hllc"
         self.shape = tuple(shape)
 
         if len(shape) == 1:
@@ -132,13 +133,20 @@ class MaraEvolutionOperator(object):
                         y0+dy/2 : y1+dy/2 : dy,
                         z0+dz/2 : z1+dz/2 : dz]
 
-    def initial_model(self, pinit):
+    def initial_model(self, pinit, ginit=None):
+        npr = self.fluid.descriptor.nprimitive
+        ngr = self.fluid.descriptor.ngravity
+        if ginit is None: ginit = lambda x,y,z: np.zeros(ngr)
         shape = self.shape
         X, Y, Z = self.coordinate_grid()
         P = np.ndarray(
-            shape=shape + (5,), buffer=np.array(
+            shape=shape + (npr,), buffer=np.array(
                 [pinit(x, y, z) for x, y, z in zip(X.flat, Y.flat, Z.flat)]))
+        G = np.ndarray(
+            shape=shape + (ngr,), buffer=np.array(
+                [ginit(x, y, z) for x, y, z in zip(X.flat, Y.flat, Z.flat)]))
         self.fluid.primitive = P
+        self.fluid.gravity = G
 
     def advance(self, dt, rk=3):
         start = time.clock()
@@ -180,10 +188,9 @@ class MaraEvolutionOperator(object):
         self.fluid.from_conserved(U)
         #self.safety.validate(self.fluid, repair=True)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
-
-        if self.sources:
-            L += self.sources.source_terms(self)
-        return L
+        self.fluid.states[0].gravity = 1.0
+        S = self.fluid.source_terms()
+        return L + S
 
     def _dUdt1d(self, fluid, solver):
         Nx, = self.fluid.shape
@@ -201,7 +208,7 @@ class MaraEvolutionOperator(object):
             Fiph = solver.intercellflux(fluid.states[:,j], dim=0)
             L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
         for i in range(Nx):
-            Giph = solver.intercellflux(fluid[i,:], dim=1)
+            Giph = solver.intercellflux(fluid.states[i,:], dim=1)
             L[i,1:] += -(Giph[1:] - Giph[:-1]) / dy
         return L
 
@@ -215,11 +222,11 @@ class MaraEvolutionOperator(object):
                 L[1:,j,k] += -(Fiph[1:] - Fiph[:-1]) / dx
         for k in range(Nz):
             for i in range(Nx):
-                Giph = solver.intercellflux(fluid[i,:,k], dim=1)
+                Giph = solver.intercellflux(fluid.states[i,:,k], dim=1)
                 L[i,1:,k] += -(Giph[1:] - Giph[:-1]) / dy
         for i in range(Nx):
             for j in range(Ny):
-                Hiph = solver.intercellflux(fluid[i,j,:], dim=2)
+                Hiph = solver.intercellflux(fluid.states[i,j,:], dim=2)
                 L[i,j,1:] += -(Hiph[1:] - Hiph[:-1]) / dz
         return L
 
@@ -236,6 +243,18 @@ def brio_wu(x, y, z):
         return [0.125, 0.100, 0.0, 0.0, 0.0]
     else:
         return [1.000, 1.000, 0.0, 0.0, 0.0]
+
+
+def uniform(x, y, z):
+    return [1.000, 1.000, 0.0, 0.0, 0.0]
+
+
+def nogravity(x, y, z):
+    return [0.0, 0.0, 0.0, 0.0]
+
+
+def quadratic_gravity(x, y, z):
+    return [x*x, 2*x, 0.0, 0.0]
 
 
 def polytrope(x, y, z):
@@ -282,7 +301,8 @@ def main():
     #mara.sources = pyfish.StaticCentralGravity(M=0.1)
     #mara.initial_model(polytrope)
     #mara.initial_model(central_mass)
-    mara.initial_model(brio_wu)
+    #mara.initial_model(brio_wu)
+    mara.initial_model(uniform, quadratic_gravity)
 
     CFL = 0.3
     chkpt_interval = 1.0
