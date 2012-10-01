@@ -211,6 +211,8 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
+        self.boundary.set_boundary(self, U1)
+        self.fluid.from_conserved(U1)
         self.safety.validate(self.fluid, repair=True)
         return time.clock() - start
 
@@ -313,9 +315,8 @@ class OnedimensionalGravityWell(object):
     sie = 2.00
     ph0 = 1.0
     def ginit(self, x, y, z):
-        sig = self.sig
-        phi = -self.ph0 * np.exp(-0.5 * x**2 / sig**2)
-        gph = -x/sig**2 * phi
+        phi = -self.ph0 * np.exp(-0.5 * x**2 / self.sig**2)
+        gph = -x/self.sig**2 * phi
         return [phi, gph, 0.0, 0.0]
 
     def pinit(self, x, y, z):
@@ -332,13 +333,14 @@ class SimulationStatus:
 
 
 def main():
-    mara = MaraEvolutionOperator([64], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
+    mara = MaraEvolutionOperator([128], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
     init = OnedimensionalGravityWell()
     mara.initial_model(init.pinit, init.ginit)
+    #mara.initial_model(brio_wu)
     mara.boundary = Inflow(mara.fluid[0].conserved(),
                            mara.fluid[-1].conserved())
 
-    CFL = 0.3
+    CFL = 0.2
     chkpt_interval = 1.0
 
     measlog = { }
@@ -352,7 +354,7 @@ def main():
 
     plot(mara, None, show=False, label='start')
 
-    while status.time_current < 2.5:
+    while status.time_current < 0.001:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
