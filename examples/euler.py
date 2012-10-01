@@ -10,7 +10,7 @@ import pyfluids
 import pyfish
 
 AdiabaticGamma = 1.4
-FluidSystem = 'gravs'
+FluidSystem = 'gravp'
 
 class Outflow(object):
     def __init__(self):
@@ -100,7 +100,7 @@ class MaraEvolutionOperator(object):
         self.safety = SafetyModule0()
 
         self.solver.reconstruction = "plm"
-        self.solver.riemannsolver = "hllc"
+        self.solver.riemannsolver = "hll"
         self.shape = tuple(shape)
 
         if len(shape) == 1:
@@ -220,6 +220,7 @@ class MaraEvolutionOperator(object):
         self.safety.validate(self.fluid, repair=True)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
         S = self.fluid.source_terms()
+        #print S
         return L + S
 
     def _dUdt1d(self, fluid, solver):
@@ -310,10 +311,11 @@ def central_mass(x, y, z):
 class OnedimensionalGravityWell(object):
     sig = 0.05
     sie = 2.00
+    ph0 = 1.0
     def ginit(self, x, y, z):
         sig = self.sig
-        phi = -np.exp(-0.5 * x**2 / sig**2)
-        gph = (x/sig**2) * np.exp(-0.5 * x**2 / sig**2)
+        phi = -self.ph0 * np.exp(-0.5 * x**2 / sig**2)
+        gph = -x/sig**2 * phi
         return [phi, gph, 0.0, 0.0]
 
     def pinit(self, x, y, z):
@@ -350,7 +352,7 @@ def main():
 
     plot(mara, None, show=False, label='start')
 
-    while status.time_current < 0.5:
+    while status.time_current < 2.5:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
