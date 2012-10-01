@@ -41,7 +41,34 @@ class Outflow(object):
         U[-ng:,:,:] = U[-(ng+1),:,:][np.newaxis,:,:,:]
 
 
-class SafetyModule(object):
+class Inflow(object):
+    def __init__(self, UL, UR):
+        self.UL = UL
+        self.UR = UR
+
+    def set_boundary(self, mara, U):
+        getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(mara, U)
+
+    def set_boundary1d(self, mara, U):
+        ng = mara.number_guard_zones()
+        U[:+ng] = self.UL
+        U[-ng:] = self.UR
+
+    def set_boundary2d(self, mara, U):
+        raise NotImplementedError
+
+    def set_boundary3d(self, mara, U):
+        raise NotImplementedError
+
+
+class SafetyModule0(object):
+    def __init__(self):
+        pass
+    def validate(self, fluid, repair=True):
+        pass
+
+
+class SafetyModule1(object):
     def __init__(self):
         pass
 
@@ -70,7 +97,7 @@ class MaraEvolutionOperator(object):
         self.boundary = Outflow()
         self.fluid = pyfluids.FluidStateVector(shape, fluid=FluidSystem, gamma=AdiabaticGamma)
         self.sources = None
-        self.safety = SafetyModule()
+        self.safety = SafetyModule0()
 
         self.solver.reconstruction = "plm"
         self.solver.riemannsolver = "hllc"
@@ -87,6 +114,12 @@ class MaraEvolutionOperator(object):
         self.dx, self.dy, self.dz = dx, dy, dz
         self.X0, self.X1 = X0, X1
 
+    def set_boundary(self):
+        ng = self.number_guard_zones()
+        U = self.fluid.conserved()
+        self.boundary.set_boundary(self, U)
+        self.fluid.from_conserved(U)
+        
     def write_checkpoint(self, status, dir=".", update_status=True, **extras):
         if update_status:
             status.chkpt_last = status.time_current
@@ -178,17 +211,14 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
-        self.boundary.set_boundary(self, U1)
-        self.fluid.from_conserved(U1)
-        #self.safety.validate(self.fluid, repair=True)
+        self.safety.validate(self.fluid, repair=True)
         return time.clock() - start
 
     def dUdt(self, U):
         self.boundary.set_boundary(self, U)
         self.fluid.from_conserved(U)
-        #self.safety.validate(self.fluid, repair=True)
+        self.safety.validate(self.fluid, repair=True)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
-        self.fluid.states[0].gravity = 1.0
         S = self.fluid.source_terms()
         return L + S
 
@@ -196,7 +226,7 @@ class MaraEvolutionOperator(object):
         Nx, = self.fluid.shape
         dx, = 1.0/Nx,
         L = np.zeros([Nx,5])
-        Fiph = solver.intercellflux(fluid.states[:], dim=0)
+        Fiph = solver.intercellflux(fluid[:], dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
         return L
 
@@ -205,10 +235,10 @@ class MaraEvolutionOperator(object):
         dx, dy = 1.0/Nx, 1.0/Ny
         L = np.zeros([Nx,Ny,5])
         for j in range(Ny):
-            Fiph = solver.intercellflux(fluid.states[:,j], dim=0)
+            Fiph = solver.intercellflux(fluid[:,j], dim=0)
             L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
         for i in range(Nx):
-            Giph = solver.intercellflux(fluid.states[i,:], dim=1)
+            Giph = solver.intercellflux(fluid[i,:], dim=1)
             L[i,1:] += -(Giph[1:] - Giph[:-1]) / dy
         return L
 
@@ -218,15 +248,15 @@ class MaraEvolutionOperator(object):
         L = np.zeros([Nx,Ny,Nz,5])
         for j in range(Ny):
             for k in range(Nz):
-                Fiph = solver.intercellflux(fluid.states[:,j,k], dim=0)
+                Fiph = solver.intercellflux(fluid[:,j,k], dim=0)
                 L[1:,j,k] += -(Fiph[1:] - Fiph[:-1]) / dx
         for k in range(Nz):
             for i in range(Nx):
-                Giph = solver.intercellflux(fluid.states[i,:,k], dim=1)
+                Giph = solver.intercellflux(fluid[i,:,k], dim=1)
                 L[i,1:,k] += -(Giph[1:] - Giph[:-1]) / dy
         for i in range(Nx):
             for j in range(Ny):
-                Hiph = solver.intercellflux(fluid.states[i,j,:], dim=2)
+                Hiph = solver.intercellflux(fluid[i,j,:], dim=2)
                 L[i,j,1:] += -(Hiph[1:] - Hiph[:-1]) / dz
         return L
 
@@ -243,18 +273,6 @@ def brio_wu(x, y, z):
         return [0.125, 0.100, 0.0, 0.0, 0.0]
     else:
         return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
-def uniform(x, y, z):
-    return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
-def nogravity(x, y, z):
-    return [0.0, 0.0, 0.0, 0.0]
-
-
-def quadratic_gravity(x, y, z):
-    return [x*x, 2*x, 0.0, 0.0]
 
 
 def polytrope(x, y, z):
@@ -289,20 +307,34 @@ def central_mass(x, y, z):
     return [rho, pre, 0.0, 0.0, 0.0]
 
 
+class OnedimensionalGravityWell(object):
+    sig = 0.05
+    sie = 2.00
+    def ginit(self, x, y, z):
+        sig = self.sig
+        phi = -np.exp(-0.5 * x**2 / sig**2)
+        gph = (x/sig**2) * np.exp(-0.5 * x**2 / sig**2)
+        return [phi, gph, 0.0, 0.0]
+
+    def pinit(self, x, y, z):
+        phi = self.ginit(x, y, z)[0]
+        e0 = self.sie
+        D0 = 1.0
+        rho = D0 * np.exp(-phi / (e0 * (AdiabaticGamma - 1.0)))
+        pre = rho * e0 * (AdiabaticGamma - 1.0)
+        return [rho, pre, 0.0, 0.0, 0.0]
+
+
 class SimulationStatus:
     pass
 
 
 def main():
-    mara = MaraEvolutionOperator([128], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
-    #mara = MaraEvolutionOperator([16,16,16], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
-    #mara.sources = pyfish.SelfGravitySourceTerms()
-    #mara.sources = EnclosedMassMonopoleGravity()
-    #mara.sources = pyfish.StaticCentralGravity(M=0.1)
-    #mara.initial_model(polytrope)
-    #mara.initial_model(central_mass)
-    #mara.initial_model(brio_wu)
-    mara.initial_model(uniform, quadratic_gravity)
+    mara = MaraEvolutionOperator([64], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
+    init = OnedimensionalGravityWell()
+    mara.initial_model(init.pinit, init.ginit)
+    mara.boundary = Inflow(mara.fluid[0].conserved(),
+                           mara.fluid[-1].conserved())
 
     CFL = 0.3
     chkpt_interval = 1.0
@@ -316,7 +348,9 @@ def main():
     status.chkpt_number = 0
     status.chkpt_last = 0.0
 
-    while status.time_current < 0.2:
+    plot(mara, None, show=False, label='start')
+
+    while status.time_current < 0.5:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
@@ -339,6 +373,7 @@ def main():
         measlog[status.iteration]["message"] = status.message
         print status.message
 
+    mara.set_boundary()
     return mara, measlog
 
 
@@ -355,10 +390,11 @@ def plot3dslices(A, show=False):
         plt.show()
 
 
-def plot(mara, measlog):
+def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
     if len(mara.shape) == 1:
-        plt.plot(mara.fluid.primitive)
+        plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
+        plt.plot(mara.fluid.gravity[:,0], '-x', **kwargs)
     if len(mara.shape) == 2:
         plt.imshow(mara.fluid.primitive[:,:,0], interpolation='nearest')
     if len(mara.shape) == 3:
@@ -366,10 +402,9 @@ def plot(mara, measlog):
         plot3dslices(mara.fluid.primitive[...,0])
         S, phi = mara.sources.source_terms(mara, retphi=True)
         plot3dslices(phi)
-    #ax = plt.figure().add_subplot(111)
-    #ax.plot([m["time"] for m in measlog.values()],
-    #        [m["kinetic"] for m in measlog.values()], '-o')
-    plt.show()
+    if show:
+        plt.legend()
+        plt.show()
 
 
 if __name__ == "__main__":
@@ -377,4 +412,4 @@ if __name__ == "__main__":
     #p = pstats.Stats('mara_pstats')
     #p.sort_stats('time').print_stats()
     mara, measlog = main()
-    plot(mara, measlog)
+    plot(mara, measlog, label='end')
