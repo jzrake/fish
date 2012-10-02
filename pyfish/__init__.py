@@ -1,3 +1,6 @@
 
 from pyfish.fish import FishSolver
-from pyfish.gravity import *
+
+import pyfish.gravity
+import pyfish.boundary
+import pyfish.problems

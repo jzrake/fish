@@ -9,97 +9,14 @@ import numpy as np
 import pyfluids
 import pyfish
 
-AdiabaticGamma = 1.4
-FluidSystem = 'gravp'
-
-class Outflow(object):
-    def __init__(self):
-        pass
-
-    def set_boundary(self, mara, U):
-        getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(mara, U)
-
-    def set_boundary1d(self, mara, U):
-        ng = mara.number_guard_zones()
-        U[:+ng] = U[+(ng+0)]
-        U[-ng:] = U[-(ng+1)]
-
-    def set_boundary2d(self, mara, U):
-        ng = mara.number_guard_zones()
-        U[:,:+ng] = U[:,+(ng+0)][:,np.newaxis,:]
-        U[:,-ng:] = U[:,-(ng+1)][:,np.newaxis,:]
-        U[:+ng,:] = U[+(ng+0),:][np.newaxis,:,:]
-        U[-ng:,:] = U[-(ng+1),:][np.newaxis,:,:]
-
-    def set_boundary3d(self, mara, U):
-        ng = mara.number_guard_zones()
-        U[:,:,:+ng] = U[:,:,+(ng+0)][:,:,np.newaxis,:]
-        U[:,:,-ng:] = U[:,:,-(ng+1)][:,:,np.newaxis,:]
-        U[:,:+ng,:] = U[:,+(ng+0),:][:,np.newaxis,:,:]
-        U[:,-ng:,:] = U[:,-(ng+1),:][:,np.newaxis,:,:]
-        U[:+ng,:,:] = U[+(ng+0),:,:][np.newaxis,:,:,:]
-        U[-ng:,:,:] = U[-(ng+1),:,:][np.newaxis,:,:,:]
-
-
-class Inflow(object):
-    def __init__(self, SL, SR):
-        self.UL = np.array([S.conserved() for S in SL])
-        self.UR = np.array([S.conserved() for S in SR])
-
-    def set_boundary(self, mara, U):
-        getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(mara, U)
-
-    def set_boundary1d(self, mara, U):
-        ng = mara.number_guard_zones()
-        U[:+ng] = self.UL
-        U[-ng:] = self.UR
-
-    def set_boundary2d(self, mara, U):
-        raise NotImplementedError
-
-    def set_boundary3d(self, mara, U):
-        raise NotImplementedError
-
-
-class SafetyModule0(object):
-    def __init__(self):
-        pass
-    def validate(self, fluid, repair=True):
-        pass
-
-
-class SafetyModule1(object):
-    def __init__(self):
-        pass
-
-    def validate(self, fluid, repair=True):
-        P = fluid.primitive
-        if (P[...,0] < 0.0).any():
-            if repair:
-                I = np.where(P[...,1] < 0.0)
-                P[...,0][I] = 1e-3
-                print "applied density floor to %d zones" % len(I[0])
-            else:
-                raise RuntimeError("negative density")
-        if (P[...,1] < 0.0).any():
-            if repair:
-                I = np.where(P[...,1] < 0.0)
-                P[...,1][I] = 1e-3
-                print "applied pressure floor to %d zones" % len(I[0])
-            else:
-                raise RuntimeError("negative pressure")
-        fluid.primitive = P
 
 
 class MaraEvolutionOperator(object):
-    def __init__(self, shape, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
+    def __init__(self, shape, descr, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         self.solver = pyfish.FishSolver()
-        self.boundary = Outflow()
-        self.fluid = pyfluids.FluidStateVector(shape,
-                                               fluid=FluidSystem,
-                                               gamma=AdiabaticGamma)
+        self.boundary = pyfish.boundary.Outflow()
+        self.fluid = pyfluids.FluidStateVector(shape, descr)
         self.sources = None
-        self.safety = SafetyModule0()
 
         self.solver.reconstruction = "plm"
         self.solver.riemannsolver = "hll"
@@ -215,13 +132,11 @@ class MaraEvolutionOperator(object):
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
         self.boundary.set_boundary(self, U1)
         self.fluid.from_conserved(U1)
-        self.safety.validate(self.fluid, repair=True)
         return time.clock() - start
 
     def dUdt(self, U):
         self.boundary.set_boundary(self, U)
         self.fluid.from_conserved(U)
-        self.safety.validate(self.fluid, repair=True)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
         S = self.fluid.source_terms()
         #print S
@@ -266,122 +181,20 @@ class MaraEvolutionOperator(object):
         return L
 
 
-def explosion(x, y, z):
-    if (x**2 + y**2 + z**2) > 0.05:
-        return [0.125, 0.100, 0.0, 0.0, 0.0]
-    else:
-        return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
-def brio_wu(x, y, z):
-    if x > 0.0:
-        return [0.125, 0.100, 0.0, 0.0, 0.0]
-    else:
-        return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
-def polytrope(x, y, z):
-    rho_c = 1.0    # central density
-    rho_f = 1.0e-3 # floor (atmospheric) density
-    G = 1.0        # gravitational constant
-    b = 0.3        # beta, stellar radius
-    a = b / np.pi  # alpha
-    n = 1.0        # polytropic index
-    K = 4*np.pi*G * a**2 / ((n + 1) * rho_c**(1.0/n - 1.0))
-    r = (x**2 + y**2 + z**2)**0.5 / a
-    if r < 1e-6:
-        rho = rho_c
-    elif r >= np.pi:
-        rho = rho_f
-    else:
-        rho = rho_c * np.sin(r) / r
-    pre = K * rho**2
-    return [rho, pre, 0.0, 0.0, 0.0]
-
-
-def central_mass(x, y, z):
-    rho_c = 1.0    # central density
-    rho_f = 1.0e-2 # floor (atmospheric) density
-    a = 0.3        # alpha, stellar radius
-    r = (x**2 + y**2 + z**2)**0.5 / a
-    if r < 0.5:
-        rho = rho_c
-    else:
-        rho = rho_f
-    pre = 1.0
-    return [rho, pre, 0.0, 0.0, 0.0]
-
-
-class OneDimensionalUpsidedownGaussian(object):
-    sig = 0.05
-    sie = 2.00
-    ph0 = 1.0
-    def ginit(self, x, y, z):
-        phi = -self.ph0 * np.exp(-0.5 * x**2 / self.sig**2)
-        gph = -x/self.sig**2 * phi
-        return [phi, gph, 0.0, 0.0]
-
-    def pinit(self, x, y, z):
-        phi = self.ginit(x, y, z)[0]
-        e0 = self.sie
-        D0 = 1.0
-        rho = D0 * np.exp(-phi / (e0 * (AdiabaticGamma - 1.0)))
-        pre = rho * e0 * (AdiabaticGamma - 1.0)
-        return [rho, pre, 0.0, 0.0, 0.0]
-
-
-class OneDimensionalPolytrope(object):
-    """
-    AdiabaticGamma must be 2
-    """
-    D0 = 1.0
-    R = 1.0
-    def ginit(self, x, y, z):
-        R = self.R
-        phi = -(self.D0 / (np.pi/R)**2) * np.cos(np.pi * x / R)
-        gph = +(self.D0 / (np.pi/R)**1) * np.sin(np.pi * x / R)
-        return [phi, gph, 0.0, 0.0]
-
-    def pinit(self, x, y, z):
-        R = self.R
-        K = 0.5 * R**2 / np.pi**2
-        rho = self.D0 * np.cos(np.pi * x / R)
-        pre = K * rho**2.0
-        return [rho, pre, 0.0, 0.0, 0.0]
-
-
 class SimulationStatus:
     pass
 
 
 def main():
-    mara = MaraEvolutionOperator([128], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
-    init = OneDimensionalPolytrope()
-    mara.initial_model(init.pinit, init.ginit)
-    mara.boundary = Inflow(mara.fluid[0:3], mara.fluid[-3:])
+    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=25.0, fluid='gravp')
+    #problem = pyfish.problems.BrioWuShocktube()
+    mara = MaraEvolutionOperator([16], problem.descriptor,
+                                 X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
+    mara.initial_model(problem.pinit, problem.ginit)
+    mara.boundary = problem.build_boundary(mara)
 
-    """
-    import matplotlib.pyplot as plt
-    phi0 = mara.fluid.gravity[:,0]
-    gph0 = mara.fluid.gravity[:,1]
-    rho0 = mara.fluid.primitive[:,0]
-    pre0 = mara.fluid.primitive[:,1]
-    #gph1 = np.gradient(phi0, 1.0/phi0.size)
-    lph0 = np.gradient(gph0, 1.0/gph0.size)
-    gpre = np.gradient(pre0, 1.0/pre0.size)
-    lph1 = mara.fluid.primitive[:,0]
-
-    plt.plot(gpre, label='pressure gradient')
-    plt.plot(-rho0 * gph0, label='-rho * dphi/dx')
-    #plt.plot(lph1, label='rho')
-
-    plt.legend()
-    plt.show()
-    exit()
-    """
-
-    CFL = 0.2
-    chkpt_interval = 2.5 * 2
+    CFL = 0.6
+    chkpt_interval = 100.0
 
     measlog = { }
     status = SimulationStatus()
@@ -394,10 +207,10 @@ def main():
 
     plot(mara, None, show=False, label='start')
 
-    while status.time_current < 50:
+    while status.time_current < problem.tfinal:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
-        wall_step = mara.advance(dt, rk=3)
+        wall_step = mara.advance(dt, rk=2)
 
         status.time_step = dt
         status.time_current += status.time_step
@@ -437,7 +250,7 @@ def plot3dslices(A, show=False):
 
 def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
-    plt.figure()
+    #plt.figure()
     if len(mara.shape) == 1:
         plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
         #plt.plot(mara.fluid.gravity[:,0], '-x', **kwargs)

@@ -1,6 +1,40 @@
 
 import numpy as np
 
+
+def polytrope(x, y, z):
+    rho_c = 1.0    # central density
+    rho_f = 1.0e-3 # floor (atmospheric) density
+    G = 1.0        # gravitational constant
+    b = 0.3        # beta, stellar radius
+    a = b / np.pi  # alpha
+    n = 1.0        # polytropic index
+    K = 4*np.pi*G * a**2 / ((n + 1) * rho_c**(1.0/n - 1.0))
+    r = (x**2 + y**2 + z**2)**0.5 / a
+    if r < 1e-6:
+        rho = rho_c
+    elif r >= np.pi:
+        rho = rho_f
+    else:
+        rho = rho_c * np.sin(r) / r
+    pre = K * rho**2
+    return [rho, pre, 0.0, 0.0, 0.0]
+
+
+def central_mass(x, y, z):
+    rho_c = 1.0    # central density
+    rho_f = 1.0e-2 # floor (atmospheric) density
+    a = 0.3        # alpha, stellar radius
+    r = (x**2 + y**2 + z**2)**0.5 / a
+    if r < 0.5:
+        rho = rho_c
+    else:
+        rho = rho_f
+    pre = 1.0
+    return [rho, pre, 0.0, 0.0, 0.0]
+
+
+
 class SelfGravitySourceTerms(object):
     def __init__(self, G=1.0):
         self.G = G
@@ -68,13 +102,6 @@ class EnclosedMassMonopoleGravity(object):
 
         Menc_f = interp1d(renc, Menc, kind='cubic')
         Menc_i = Menc_f(r)
-
-        """
-        import matplotlib.pyplot as plt
-        plt.plot(np.linspace(0.0, 1.0, 100),
-                 [Menc_f(r0) for r0 in np.linspace(0.0, 1.0, 100)], '-o')
-        plt.show()
-        """
 
         rhatx, rhaty, rhatz = X/r, Y/r, Z/r
         fx = -G * Menc_i * rhatx / r2
