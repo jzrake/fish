@@ -42,9 +42,9 @@ class Outflow(object):
 
 
 class Inflow(object):
-    def __init__(self, UL, UR):
-        self.UL = UL
-        self.UR = UR
+    def __init__(self, SL, SR):
+        self.UL = np.array([S.conserved() for S in SL])
+        self.UR = np.array([S.conserved() for S in SR])
 
     def set_boundary(self, mara, U):
         getattr(self, "set_boundary%dd" % (len(U.shape) - 1))(mara, U)
@@ -95,7 +95,9 @@ class MaraEvolutionOperator(object):
     def __init__(self, shape, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         self.solver = pyfish.FishSolver()
         self.boundary = Outflow()
-        self.fluid = pyfluids.FluidStateVector(shape, fluid=FluidSystem, gamma=AdiabaticGamma)
+        self.fluid = pyfluids.FluidStateVector(shape,
+                                               fluid=FluidSystem,
+                                               gamma=AdiabaticGamma)
         self.sources = None
         self.safety = SafetyModule0()
 
@@ -310,7 +312,7 @@ def central_mass(x, y, z):
     return [rho, pre, 0.0, 0.0, 0.0]
 
 
-class OnedimensionalGravityWell(object):
+class OneDimensionalUpsidedownGaussian(object):
     sig = 0.05
     sie = 2.00
     ph0 = 1.0
@@ -328,20 +330,58 @@ class OnedimensionalGravityWell(object):
         return [rho, pre, 0.0, 0.0, 0.0]
 
 
+class OneDimensionalPolytrope(object):
+    """
+    AdiabaticGamma must be 2
+    """
+    D0 = 1.0
+    R = 1.0
+    def ginit(self, x, y, z):
+        R = self.R
+        phi = -(self.D0 / (np.pi/R)**2) * np.cos(np.pi * x / R)
+        gph = +(self.D0 / (np.pi/R)**1) * np.sin(np.pi * x / R)
+        return [phi, gph, 0.0, 0.0]
+
+    def pinit(self, x, y, z):
+        R = self.R
+        K = 0.5 * R**2 / np.pi**2
+        rho = self.D0 * np.cos(np.pi * x / R)
+        pre = K * rho**2.0
+        return [rho, pre, 0.0, 0.0, 0.0]
+
+
 class SimulationStatus:
     pass
 
 
 def main():
     mara = MaraEvolutionOperator([128], X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
-    init = OnedimensionalGravityWell()
+    init = OneDimensionalPolytrope()
     mara.initial_model(init.pinit, init.ginit)
-    #mara.initial_model(brio_wu)
-    mara.boundary = Inflow(mara.fluid[0].conserved(),
-                           mara.fluid[-1].conserved())
+    mara.boundary = Inflow(mara.fluid[0:3], mara.fluid[-3:])
+
+    """
+    import matplotlib.pyplot as plt
+    phi0 = mara.fluid.gravity[:,0]
+    gph0 = mara.fluid.gravity[:,1]
+    rho0 = mara.fluid.primitive[:,0]
+    pre0 = mara.fluid.primitive[:,1]
+    #gph1 = np.gradient(phi0, 1.0/phi0.size)
+    lph0 = np.gradient(gph0, 1.0/gph0.size)
+    gpre = np.gradient(pre0, 1.0/pre0.size)
+    lph1 = mara.fluid.primitive[:,0]
+
+    plt.plot(gpre, label='pressure gradient')
+    plt.plot(-rho0 * gph0, label='-rho * dphi/dx')
+    #plt.plot(lph1, label='rho')
+
+    plt.legend()
+    plt.show()
+    exit()
+    """
 
     CFL = 0.2
-    chkpt_interval = 1.0
+    chkpt_interval = 2.5 * 2
 
     measlog = { }
     status = SimulationStatus()
@@ -354,7 +394,7 @@ def main():
 
     plot(mara, None, show=False, label='start')
 
-    while status.time_current < 0.001:
+    while status.time_current < 50:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
@@ -371,6 +411,7 @@ def main():
         if status.time_current - status.chkpt_last > chkpt_interval:
             mara.write_checkpoint(status, dir="data/test", update_status=True,
                                   measlog=measlog)
+            plot(mara, None, show=False, label='%d'%status.iteration)
 
         measlog[status.iteration] = mara.measure()
         measlog[status.iteration]["time"] = status.time_current
@@ -396,9 +437,11 @@ def plot3dslices(A, show=False):
 
 def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
+    plt.figure()
     if len(mara.shape) == 1:
         plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
-        plt.plot(mara.fluid.gravity[:,0], '-x', **kwargs)
+        #plt.plot(mara.fluid.gravity[:,0], '-x', **kwargs)
+        plt.ylim(0,1)
     if len(mara.shape) == 2:
         plt.imshow(mara.fluid.primitive[:,:,0], interpolation='nearest')
     if len(mara.shape) == 3:
