@@ -1,14 +1,13 @@
-/bin/testfish
 
-/include/fish.h
-/lib/libfish.a
-/lib/libfish.so
-/setup.sh
-/src/fish.o
-/src/testfish.o
-/src/euler.o
-/src/weno.o
+/bin/*
+/include/*
+/lib/*
 
+*.o
+*.pyc
 *.np
 *.png
 *.pk
+
+/pyfish/fish.c
+/pyfish/fish.so

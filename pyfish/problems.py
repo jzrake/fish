@@ -6,6 +6,9 @@ from pyfish import boundary
 
 class TestProblem(object):
     tfinal = 1.0
+    lower_bounds = [-0.5, -0.5, -0.5]
+    upper_bounds = [+0.5, +0.5, +0.5]
+    resolution = [128]
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
             setattr(self, k, v)
@@ -62,6 +65,9 @@ class OneDimensionalPolytrope(TestProblem):
     gamma = 2.0
     D0 = 1.0
     R = 1.1
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+
     def ginit(self, x, y, z):
         R = self.R
         phi = -(self.D0 / (np.pi/R)**2) * np.cos(np.pi * x / R)

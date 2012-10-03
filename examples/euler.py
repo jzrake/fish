@@ -12,9 +12,13 @@ import pyfish
 
 
 class MaraEvolutionOperator(object):
-    def __init__(self, shape, descr, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
+    def __init__(self, problem):
+        descr = problem.fluid_descriptor
+        X0 = problem.lower_bounds
+        X1 = problem.upper_bounds
         ng = self.number_guard_zones()
-        self.shape = tuple([n + 2*ng for n in shape])
+
+        self.shape = tuple([n + 2*ng for n in problem.resolution])
         self.fluid = pyfluids.FluidStateVector(self.shape, descr)
         self.solver = pyfish.FishSolver()
         self.solver.reconstruction = "plm"
@@ -40,7 +44,7 @@ class MaraEvolutionOperator(object):
         U = self.fluid.conserved()
         self.boundary.set_boundary(self, U)
         self.fluid.from_conserved(U)
-        
+
     def write_checkpoint(self, status, dir=".", update_status=True, **extras):
         if update_status:
             status.chkpt_last = status.time_current
@@ -112,28 +116,20 @@ class MaraEvolutionOperator(object):
     def advance(self, dt, rk=3):
         start = time.clock()
         U0 = self.fluid.conserved()
+        # RungeKuttaSingleStep
         if rk == 1:
-            """
-            RungeKuttaSingleStep
-            """
             U1 = U0 + dt * self.dUdt(U0)
+        # RungeKuttaRk2Tvd
         if rk == 2:
-            """
-            RungeKuttaRk2Tvd
-            """
             U1 =      U0 +      dt*self.dUdt(U0)
             U1 = 0.5*(U0 + U1 + dt*self.dUdt(U1))
+        # RungeKuttaShuOsherRk3
         if rk == 3:
-            """
-            RungeKuttaShuOsherRk3
-            """
             U1 =      U0 +                  dt * self.dUdt(U0)
             U1 = 3./4*U0 + 1./4*U1 + 1./4 * dt * self.dUdt(U1)
             U1 = 1./3*U0 + 2./3*U1 + 2./3 * dt * self.dUdt(U1)
+        # RungeKuttaClassicRk4
         if rk == 4:
-            """
-            RungeKuttaClassicRk4
-            """
             L1 = self.dUdt(U0)
             L2 = self.dUdt(U0 + (0.5*dt) * L1)
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
@@ -195,17 +191,16 @@ class SimulationStatus:
 
 
 def main():
+    interactive_plot = False
     #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
-    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=0.0, fluid='gravs')
+    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravs')
     #problem = pyfish.problems.BrioWuShocktube()
     #psolver = pyfish.gravity.PoissonSolver1d()
-    mara = MaraEvolutionOperator([128], problem.fluid_descriptor,
-                                 X0=[-0.5,-0.5,-0.5],
-                                 X1=[+0.5,+0.5,+0.5])
+    mara = MaraEvolutionOperator(problem)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
-    CFL = 0.2
+    CFL = 0.4
     chkpt_interval = 100.0
 
     measlog = { }
@@ -217,7 +212,16 @@ def main():
     status.chkpt_number = 0
     status.chkpt_last = 0.0
 
+    if interactive_plot:
+        import matplotlib.pyplot as plt
+        plt.ion()
+        line, = plt.plot(mara.fluid.primitive[:,0], '-o')
+
     while status.time_current < problem.tfinal:
+        if interactive_plot:
+            line.set_ydata(mara.fluid.primitive[:,0])
+            plt.draw()
+
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
