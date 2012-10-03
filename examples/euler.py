@@ -15,7 +15,6 @@ class MaraEvolutionOperator(object):
     def __init__(self, shape, descr, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
         ng = self.number_guard_zones()
         self.shape = tuple([n + 2*ng for n in shape])
-        self.boundary = pyfish.boundary.Outflow()
         self.fluid = pyfluids.FluidStateVector(self.shape, descr)
         self.solver = pyfish.FishSolver()
         self.solver.reconstruction = "plm"
@@ -196,17 +195,17 @@ class SimulationStatus:
 
 
 def main():
-    problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
-    #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=25.0, fluid='gravp')
+    #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
+    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=0.0, fluid='gravs')
     #problem = pyfish.problems.BrioWuShocktube()
-    psolver = pyfish.gravity.PoissonSolver1d()
+    #psolver = pyfish.gravity.PoissonSolver1d()
     mara = MaraEvolutionOperator([128], problem.fluid_descriptor,
                                  X0=[-0.5,-0.5,-0.5],
                                  X1=[+0.5,+0.5,+0.5])
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
-    CFL = 0.6
+    CFL = 0.2
     chkpt_interval = 100.0
 
     measlog = { }
@@ -263,7 +262,7 @@ def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
     plt.figure()
     if len(mara.shape) == 1:
-        #plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
+        plt.plot(mara.fluid.primitive[:,0], '-o', label='rho')
         plt.plot(mara.fluid.gravity[:,0], '-x', label='phi')
         plt.plot(mara.fluid.gravity[:,1], '-x', label='grad phi')
         #plt.ylim(0,1)

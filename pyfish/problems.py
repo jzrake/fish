@@ -61,7 +61,7 @@ class OneDimensionalPolytrope(TestProblem):
     fluid = 'gravs' # or gravp, grave
     gamma = 2.0
     D0 = 1.0
-    R = 1.0
+    R = 1.1
     def ginit(self, x, y, z):
         R = self.R
         phi = -(self.D0 / (np.pi/R)**2) * np.cos(np.pi * x / R)
@@ -72,6 +72,8 @@ class OneDimensionalPolytrope(TestProblem):
         R = self.R
         K = 0.5 * R**2 / np.pi**2
         rho = self.D0 * np.cos(np.pi * x / R)
+        if rho < 1e-8:
+            rho = 1e-8 # prevent zero density
         pre = K * rho**2.0
         return [rho, pre, 0.0, 0.0, 0.0]
 
