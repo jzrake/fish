@@ -13,22 +13,25 @@ import pyfish
 
 class MaraEvolutionOperator(object):
     def __init__(self, shape, descr, X0=[0.0, 0.0, 0.0], X1=[1.0, 1.0, 1.0]):
-        self.solver = pyfish.FishSolver()
+        ng = self.number_guard_zones()
+        self.shape = tuple([n + 2*ng for n in shape])
         self.boundary = pyfish.boundary.Outflow()
-        self.fluid = pyfluids.FluidStateVector(shape, descr)
-        self.sources = None
-
+        self.fluid = pyfluids.FluidStateVector(self.shape, descr)
+        self.solver = pyfish.FishSolver()
         self.solver.reconstruction = "plm"
         self.solver.riemannsolver = "hll"
-        self.shape = tuple(shape)
 
-        if len(shape) == 1:
+        if len(self.shape) == 1:
             Nx, Ny, Nz = self.fluid.shape + (1, 1)
-        if len(shape) == 2:
+        if len(self.shape) == 2:
             Nx, Ny, Nz = self.fluid.shape + (1,)
-        if len(shape) == 3:
+        if len(self.shape) == 3:
             Nx, Ny, Nz = self.fluid.shape
-        dx, dy, dz = (X1[0] - X0[0])/Nx, (X1[1] - X0[1])/Ny, (X1[2] - X0[2])/Nz
+
+        dx = (X1[0] - X0[0])/(Nx - (2*ng if Nx > 1 else 0))
+        dy = (X1[1] - X0[1])/(Ny - (2*ng if Ny > 1 else 0))
+        dz = (X1[2] - X0[2])/(Nz - (2*ng if Nz > 1 else 0))
+
         self.Nx, self.Ny, self.Nz = Nx, Ny, Nz
         self.dx, self.dy, self.dz = dx, dy, dz
         self.X0, self.X1 = X0, X1
@@ -77,10 +80,17 @@ class MaraEvolutionOperator(object):
         return 3
 
     def coordinate_grid(self):
+        ng = self.number_guard_zones()
         Nx, Ny, Nz = self.Nx, self.Ny, self.Nz
         dx, dy, dz = self.dx, self.dy, self.dz
         x0, y0, z0 = self.X0
         x1, y1, z1 = self.X1
+        if self.Nx > 1: x0 -= ng * dx
+        if self.Ny > 1: y0 -= ng * dy
+        if self.Nz > 1: z0 -= ng * dz
+        if self.Nx > 1: x1 += ng * dx
+        if self.Ny > 1: y1 += ng * dy
+        if self.Nz > 1: z1 += ng * dz
         return np.mgrid[x0+dx/2 : x1+dx/2 : dx,
                         y0+dy/2 : y1+dy/2 : dy,
                         z0+dz/2 : z1+dz/2 : dz]
@@ -186,10 +196,13 @@ class SimulationStatus:
 
 
 def main():
-    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=25.0, fluid='gravp')
+    problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
+    #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=25.0, fluid='gravp')
     #problem = pyfish.problems.BrioWuShocktube()
-    mara = MaraEvolutionOperator([16], problem.descriptor,
-                                 X0=[-0.5,-0.5,-0.5], X1=[0.5,0.5,0.5])
+    psolver = pyfish.gravity.PoissonSolver1d()
+    mara = MaraEvolutionOperator([128], problem.fluid_descriptor,
+                                 X0=[-0.5,-0.5,-0.5],
+                                 X1=[+0.5,+0.5,+0.5])
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
@@ -205,12 +218,10 @@ def main():
     status.chkpt_number = 0
     status.chkpt_last = 0.0
 
-    plot(mara, None, show=False, label='start')
-
     while status.time_current < problem.tfinal:
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = CFL * mara.min_grid_spacing() / ml
-        wall_step = mara.advance(dt, rk=2)
+        wall_step = mara.advance(dt, rk=3)
 
         status.time_step = dt
         status.time_current += status.time_step
@@ -250,11 +261,12 @@ def plot3dslices(A, show=False):
 
 def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
-    #plt.figure()
+    plt.figure()
     if len(mara.shape) == 1:
-        plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
-        #plt.plot(mara.fluid.gravity[:,0], '-x', **kwargs)
-        plt.ylim(0,1)
+        #plt.plot(mara.fluid.primitive[:,0], '-o', **kwargs)
+        plt.plot(mara.fluid.gravity[:,0], '-x', label='phi')
+        plt.plot(mara.fluid.gravity[:,1], '-x', label='grad phi')
+        #plt.ylim(0,1)
     if len(mara.shape) == 2:
         plt.imshow(mara.fluid.primitive[:,:,0], interpolation='nearest')
     if len(mara.shape) == 3:

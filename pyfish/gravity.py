@@ -1,38 +1,33 @@
 
 import numpy as np
+from numpy.fft import *
 
 
-def polytrope(x, y, z):
-    rho_c = 1.0    # central density
-    rho_f = 1.0e-3 # floor (atmospheric) density
-    G = 1.0        # gravitational constant
-    b = 0.3        # beta, stellar radius
-    a = b / np.pi  # alpha
-    n = 1.0        # polytropic index
-    K = 4*np.pi*G * a**2 / ((n + 1) * rho_c**(1.0/n - 1.0))
-    r = (x**2 + y**2 + z**2)**0.5 / a
-    if r < 1e-6:
-        rho = rho_c
-    elif r >= np.pi:
-        rho = rho_f
-    else:
-        rho = rho_c * np.sin(r) / r
-    pre = K * rho**2
-    return [rho, pre, 0.0, 0.0, 0.0]
+class PoissonSolver1d(object):
+    '''
+    Solves the equation del^2 phi = rho for one-dimensional periodic arrays rho
+    using FFT's. The return value of the 'solve' function a 4-component array
+    containing phi in soln[:,0] and its gradient in soln[:,1:4].
+    '''
+    L = 1.0
 
+    def __init__(self):
+        pass
 
-def central_mass(x, y, z):
-    rho_c = 1.0    # central density
-    rho_f = 1.0e-2 # floor (atmospheric) density
-    a = 0.3        # alpha, stellar radius
-    r = (x**2 + y**2 + z**2)**0.5 / a
-    if r < 0.5:
-        rho = rho_c
-    else:
-        rho = rho_f
-    pre = 1.0
-    return [rho, pre, 0.0, 0.0, 0.0]
-
+    def solve(self, x, rho):
+        Nx, = rho.shape
+        k = fftfreq(Nx) * 2*np.pi*Nx
+        k[0] = 1.0
+        rhohat = fft(rho)
+        rhobar = rhohat[0] / rho.size
+        phihat = rhohat / -k**2 + fft(0.5 * rhobar * x**2)
+        gphhat = 1.j * k * phihat
+        phi = ifft(phihat).real
+        gph = ifft(1.j * k * phihat).real
+        soln = np.zeros(rho.shape + (4,))
+        soln[:,0] = phi
+        soln[:,1] = gph
+        return soln
 
 
 class SelfGravitySourceTerms(object):
@@ -151,3 +146,32 @@ class StaticCentralGravity(object):
         S[...,4] = rho * fz
 
         return (S, phi) if retphi else S
+
+
+
+"""
+    import matplotlib.pyplot as plt
+    X, Y, Z = mara.coordinate_grid()
+    ng = mara.number_guard_zones()
+    n2 = 2 * ng
+    mara.fluid.gravity[ng:-ng] = psolver.solve(X[ng:-ng,0,0], mara.fluid.primitive[ng:-ng,0])
+    mara.fluid.gravity[:+ng,0] = mara.fluid.gravity[-n2:-ng,0]
+    mara.fluid.gravity[-ng:,0] = mara.fluid.gravity[+ng:+n2,0]
+    mara.fluid.gravity[:+ng,1] = mara.fluid.gravity[+ng+1,1]
+    mara.fluid.gravity[-ng:,1] = mara.fluid.gravity[-ng-2,1]
+
+    phi0 = mara.fluid.gravity[ng:-ng,0]
+    gph0 = mara.fluid.gravity[ng:-ng,1]
+    gph1 = np.gradient(phi0, 1.0/phi0.size)
+    lph0 = np.gradient(gph1, 1.0/gph1.size)
+    lph1 = mara.fluid.primitive[ng:-ng,0]
+
+    #plt.plot(phi0, '-o', label='phi')
+    #plt.plot(gph0, '-x', label='grad phi')
+    #plt.plot(gph1, label='diff phi')
+    plt.plot(lph0, '-o', label='laplacian phi')
+    plt.plot(lph1, '-x', label='density')
+    plt.legend(loc='best')
+    plt.show()
+    exit()
+"""
