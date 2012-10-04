@@ -39,11 +39,17 @@ class MaraEvolutionOperator(object):
         self.dx, self.dy, self.dz = dx, dy, dz
         self.X0, self.X1 = X0, X1
 
-    def set_boundary(self):
-        ng = self.number_guard_zones()
-        U = self.fluid.conserved()
-        self.boundary.set_boundary(self, U)
-        self.fluid.from_conserved(U)
+    @property
+    def fields(self):
+        P = self.fluid.primitive
+        G = self.fluid.gravity
+        return {'rho': P[:,0],
+                'pre': P[:,1],
+                'vx' : P[:,2],
+                'vy' : P[:,3],
+                'vz' : P[:,4],
+                'phi': G[:,0] if self.fluid.descriptor.ngravity else None,
+                'gph': G[:,1] if self.fluid.descriptor.ngravity else None}
 
     def write_checkpoint(self, status, dir=".", update_status=True, **extras):
         if update_status:
@@ -52,7 +58,7 @@ class MaraEvolutionOperator(object):
         try:
             os.makedirs(dir)
             print "creating data directory", dir
-        except OSError: # File exists
+        except OSError: # Directory exists
             pass
         chkpt = { "prim": self.fluid.primitive, "status": status.__dict__ }
         chkpt.update(extras)
@@ -135,21 +141,19 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
-        self.boundary.set_boundary(self, U1)
-        self.fluid.from_conserved(U1)
+        self.boundary.set_boundary(self)
         return time.clock() - start
 
     def dUdt(self, U):
-        self.boundary.set_boundary(self, U)
+        self.boundary.set_boundary(self)
         self.fluid.from_conserved(U)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
         S = self.fluid.source_terms()
-        #print S
         return L + S
 
     def _dUdt1d(self, fluid, solver):
         Nx, = self.fluid.shape
-        dx, = 1.0/Nx,
+        dx, = self.dx,
         L = np.zeros([Nx,5])
         Fiph = solver.intercellflux(fluid[:], dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
@@ -157,7 +161,7 @@ class MaraEvolutionOperator(object):
 
     def _dUdt2d(self, fluid, solver):
         Nx, Ny = self.fluid.shape
-        dx, dy = 1.0/Nx, 1.0/Ny
+        dx, dy = self.dx, self.dy
         L = np.zeros([Nx,Ny,5])
         for j in range(Ny):
             Fiph = solver.intercellflux(fluid[:,j], dim=0)
@@ -169,7 +173,7 @@ class MaraEvolutionOperator(object):
 
     def _dUdt3d(self, fluid, solver):
         Nx, Ny, Nz = self.fluid.shape
-        dx, dy, dz = 1.0/Nx, 1.0/Ny, 1.0/Nz
+        dx, dy, dz = self.dx, self.dy, self.dz
         L = np.zeros([Nx,Ny,Nz,5])
         for j in range(Ny):
             for k in range(Nz):
@@ -191,42 +195,48 @@ class SimulationStatus:
 
 
 def main():
-    interactive_plot = False
-    problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
+    #problem = pyfish.problems.PeriodicDensityWave(tfinal=0.5, fluid='gravs')
+    #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
     #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravp')
-    #problem = pyfish.problems.BrioWuShocktube()
-    #psolver = pyfish.gravity.PoissonSolver1d()
+    problem = pyfish.problems.BrioWuShocktube()
+    psolver = pyfish.gravity.PoissonSolver1d()
     mara = MaraEvolutionOperator(problem)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
-    CFL = 0.4
-    chkpt_interval = 1.0
-
-    measlog = { }
+    # Status setup
     status = SimulationStatus()
-
+    status.CFL = 0.6
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
     status.chkpt_number = 0
     status.chkpt_last = 0.0
+    status.chkpt_interval = 1.0
+    measlog = { }
 
-    if interactive_plot:
+    # Plotting options
+    plot_fields = problem.plot_fields
+    plot_interactive = False
+    plot_initial = False
+    plot_final = True
+
+    if plot_interactive:
         import matplotlib.pyplot as plt
         plt.ion()
-        lines = plot(mara, None)
+        lines = plot(mara, plot_fields, show=False)
 
-    plot(mara, None, show=False)
+    if plot_initial:
+        plot(mara, plot_fields, show=False, label='start')
+
     while status.time_current < problem.tfinal:
-        if interactive_plot:
-            lines['rho'].set_ydata(mara.fluid.primitive[:,0])
-            lines['pre'].set_ydata(mara.fluid.primitive[:,1])
-            lines['vx' ].set_ydata(mara.fluid.primitive[:,2])
+        if plot_interactive:
+            for f in plot_fields:
+                lines[f].set_ydata(mara.fields[f])
             plt.draw()
 
         ml = abs(mara.fluid.eigenvalues()).max()
-        dt = CFL * mara.min_grid_spacing() / ml
+        dt = status.CFL * mara.min_grid_spacing() / ml
         wall_step = mara.advance(dt, rk=3)
 
         status.time_step = dt
@@ -238,39 +248,36 @@ def main():
             (mara.fluid.size / wall_step) * 1e-3,
             (wall_step / (mara.fluid.size*5)) * 1e6)
 
-        if status.time_current - status.chkpt_last > chkpt_interval:
+        if status.time_current - status.chkpt_last > status.chkpt_interval:
             mara.write_checkpoint(status, dir="data/test", update_status=True,
                                   measlog=measlog)
-            plot(mara, None, show=False, label='%d'%status.iteration)
 
         measlog[status.iteration] = mara.measure()
         measlog[status.iteration]["time"] = status.time_current
         measlog[status.iteration]["message"] = status.message
         print status.message
 
-    mara.set_boundary()
-    return mara, measlog
+    mara.boundary.set_boundary(mara)
+    if plot_final:
+        plot(mara, plot_fields, show=True, label='end')
 
 
-def plot(mara, measlog, show=True, **kwargs):
+def plot(mara, fields, show=True, **kwargs):
     import matplotlib.pyplot as plt
     lines = { }
-    if len(mara.shape) == 1:
-        #lines['rho'], = plt.plot(mara.fluid.primitive[:,0], '-o', label='density')
-        #lines['pre'], = plt.plot(mara.fluid.primitive[:,1], '-o', label='pressure')
-        #lines['vx'], = plt.plot(mara.fluid.primitive[:,2], '-o', label='vx')
-        if mara.fluid.gravity.size:
-            lines['phi'] = plt.plot(mara.fluid.gravity[:,0], '-x', label='phi')
-            lines['gph'] = plt.plot(mara.fluid.gravity[:,1], '-x', label='grad phi')
-    if len(mara.shape) == 2:
-        plt.imshow(mara.fluid.primitive[:,:,0], interpolation='nearest')
-    if len(mara.shape) == 3:
-        Nx, Ny, Nz = mara.Nx, mara.Ny, mara.Nz
-        plot3dslices(mara.fluid.primitive[...,0])
-        S, phi = mara.sources.source_terms(mara, retphi=True)
-        plot3dslices(phi)
+
+    try:
+        axes = plot.axes
+    except:
+        plot.axes = [plt.subplot(len(fields),1,n+1) for n,f in enumerate(fields)]
+        axes = plot.axes
+
+    for ax, f in zip(axes, fields):
+        lines[f], = ax.plot(mara.fields[f], '-o', label=(
+                f + ' ' + kwargs.get('label', '')))
     if show:
-        plt.legend()
+        for ax in axes:
+            ax.legend()
         plt.show()
     return lines
 
@@ -279,5 +286,13 @@ if __name__ == "__main__":
     #cProfile.run('main()', 'mara_pstats')
     #p = pstats.Stats('mara_pstats')
     #p.sort_stats('time').print_stats()
-    mara, measlog = main()
-    plot(mara, measlog, label='end')
+    main()
+
+
+    """
+    gravity = psolver.solve(mara.fields['rho'][3:-3])
+    mara.fluid.gravity[3:-3] = gravity
+    mara.boundary.set_boundary(mara)
+    plot(mara, ['rho', 'phi'])
+    exit()
+    """

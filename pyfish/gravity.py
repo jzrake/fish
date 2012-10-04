@@ -3,7 +3,7 @@ import numpy as np
 from numpy.fft import *
 
 
-class PoissonSolver1d(object):
+class PoissonSolver1dA(object):
     '''
     Solves the equation del^2 phi = rho for one-dimensional periodic arrays rho
     using FFT's. The return value of the 'solve' function a 4-component array
@@ -31,6 +31,33 @@ class PoissonSolver1d(object):
         rhohat = fft(rho)
         rhobar = rhohat[0] / rho.size
         phihat = rhohat / -k**2 + fft(0.5 * rhobar * x**2)
+        gphhat = 1.j * k * phihat
+        phi = ifft(phihat).real
+        gph = ifft(1.j * k * phihat).real
+        soln = np.zeros(rho.shape + (4,))
+        soln[:,0] = phi
+        soln[:,1] = gph
+        return soln
+
+    def self_test(self):
+        pass
+
+
+class PoissonSolver1d(object):
+    L = 1.0
+    four_pi_G = 1.0
+
+    def __init__(self):
+        pass
+
+    def solve(self, rho):
+        Nx, = rho.shape
+        k = fftfreq(Nx) * 2*np.pi*Nx
+        k[0] = 1.0
+        rhohat = fft(rho)
+        rhobar = rhohat[0] / rho.size
+        phihat = self.four_pi_G * rhohat / -k**2
+        phihat[0] = 0.0
         gphhat = 1.j * k * phihat
         phi = ifft(phihat).real
         gph = ifft(1.j * k * phihat).real

@@ -9,6 +9,8 @@ class TestProblem(object):
     lower_bounds = [-0.5, -0.5, -0.5]
     upper_bounds = [+0.5, +0.5, +0.5]
     resolution = [128]
+    plot_fields = ['rho', 'pre', 'vx']
+
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
             setattr(self, k, v)
@@ -88,6 +90,33 @@ class OneDimensionalPolytrope(TestProblem):
         return boundary.Inflow(mara.fluid[0:ng], mara.fluid[-ng:])
 
 
+class PeriodicDensityWave(TestProblem):
+    '''
+    Gives a stationary density wave without pressure variation.
+    '''
+    fluid = 'nrhyd'
+    gamma = 1.4
+    p0 = 1.00 # background pressure
+    D0 = 1.00 # background density
+    D1 = 0.50 # density fluctuation
+    v0 = 0.00 # velocity of the wave
+    n0 = 4 # integer valued wave-number
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+
+    def ginit(self, x, y, z):
+        return [0.0, 0.0, 0.0, 0.0]
+
+    def pinit(self, x, y, z):
+        L = self.upper_bounds[0] - self.lower_bounds[0]
+        rho = self.D0 + self.D1 * np.sin(2 * self.n0 * np.pi * x / L)
+        return [rho, self.p0, self.v0, 0.0, 0.0]
+
+    def build_boundary(self, mara):
+        ng = mara.number_guard_zones()
+        return boundary.Periodic()
+
+
 class BrioWuShocktube(TestProblem):
     fluid = 'nrhyd'
     gamma = 1.4
@@ -97,9 +126,6 @@ class BrioWuShocktube(TestProblem):
             return [0.125, 0.100, 0.0, 0.0, 0.0]
         else:
             return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
-
 
 
 def polytrope3d(x, y, z):
