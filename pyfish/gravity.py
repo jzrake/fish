@@ -39,6 +39,9 @@ class PoissonSolver1d(object):
         soln[:,1] = gph
         return soln
 
+    def self_test(self):
+        pass
+
 
 class SelfGravitySourceTerms(object):
     def __init__(self, G=1.0):

@@ -192,8 +192,8 @@ class SimulationStatus:
 
 def main():
     interactive_plot = False
-    #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
-    problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravs')
+    problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
+    #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravp')
     #problem = pyfish.problems.BrioWuShocktube()
     #psolver = pyfish.gravity.PoissonSolver1d()
     mara = MaraEvolutionOperator(problem)
@@ -201,7 +201,7 @@ def main():
     mara.boundary = problem.build_boundary(mara)
 
     CFL = 0.4
-    chkpt_interval = 100.0
+    chkpt_interval = 1.0
 
     measlog = { }
     status = SimulationStatus()
@@ -215,11 +215,14 @@ def main():
     if interactive_plot:
         import matplotlib.pyplot as plt
         plt.ion()
-        line, = plt.plot(mara.fluid.primitive[:,0], '-o')
+        lines = plot(mara, None)
 
+    plot(mara, None, show=False)
     while status.time_current < problem.tfinal:
         if interactive_plot:
-            line.set_ydata(mara.fluid.primitive[:,0])
+            lines['rho'].set_ydata(mara.fluid.primitive[:,0])
+            lines['pre'].set_ydata(mara.fluid.primitive[:,1])
+            lines['vx' ].set_ydata(mara.fluid.primitive[:,2])
             plt.draw()
 
         ml = abs(mara.fluid.eigenvalues()).max()
@@ -249,27 +252,16 @@ def main():
     return mara, measlog
 
 
-def plot3dslices(A, show=False):
-    import matplotlib.pyplot as plt
-    Nx, Ny, Nz = A.shape
-    ax1 = plt.figure().add_subplot(111)
-    ax2 = plt.figure().add_subplot(111)
-    ax3 = plt.figure().add_subplot(111)
-    ax1.imshow(A[Nx/2,:,:], interpolation='nearest')
-    ax2.imshow(A[:,Ny/2,:], interpolation='nearest')
-    ax3.imshow(A[:,:,Nz/2], interpolation='nearest')
-    if show:
-        plt.show()
-
-
 def plot(mara, measlog, show=True, **kwargs):
     import matplotlib.pyplot as plt
-    plt.figure()
+    lines = { }
     if len(mara.shape) == 1:
-        plt.plot(mara.fluid.primitive[:,0], '-o', label='rho')
-        plt.plot(mara.fluid.gravity[:,0], '-x', label='phi')
-        plt.plot(mara.fluid.gravity[:,1], '-x', label='grad phi')
-        #plt.ylim(0,1)
+        #lines['rho'], = plt.plot(mara.fluid.primitive[:,0], '-o', label='density')
+        #lines['pre'], = plt.plot(mara.fluid.primitive[:,1], '-o', label='pressure')
+        #lines['vx'], = plt.plot(mara.fluid.primitive[:,2], '-o', label='vx')
+        if mara.fluid.gravity.size:
+            lines['phi'] = plt.plot(mara.fluid.gravity[:,0], '-x', label='phi')
+            lines['gph'] = plt.plot(mara.fluid.gravity[:,1], '-x', label='grad phi')
     if len(mara.shape) == 2:
         plt.imshow(mara.fluid.primitive[:,:,0], interpolation='nearest')
     if len(mara.shape) == 3:
@@ -280,6 +272,7 @@ def plot(mara, measlog, show=True, **kwargs):
     if show:
         plt.legend()
         plt.show()
+    return lines
 
 
 if __name__ == "__main__":
