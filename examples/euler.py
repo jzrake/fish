@@ -144,8 +144,28 @@ class MaraEvolutionOperator(object):
         self.boundary.set_boundary(self)
         return time.clock() - start
 
-    def dUdt(self, U):
+    def set_boundary(self):
         self.boundary.set_boundary(self)
+
+    def update_gravity(self):
+        try:
+            ng = self.number_guard_zones()
+            G = self.poisson_solver.solve(self.fields['rho'][ng:-ng])
+            self.fluid.gravity[ng:-ng] = G
+        except AttributeError:
+            pass
+
+    def validate_gravity(self):
+        import matplotlib.pyplot as plt
+        phi0 = self.fields['phi']
+        gph0 = self.fields['gph']
+        gph1 = np.gradient(phi0, self.dx)
+        plt.semilogy(abs(((gph1 - gph0))[3:-3]))
+        plt.show()
+
+    def dUdt(self, U):
+        self.update_gravity()
+        self.set_boundary()
         self.fluid.from_conserved(U)
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
         S = self.fluid.source_terms()
@@ -195,14 +215,17 @@ class SimulationStatus:
 
 
 def main():
-    #problem = pyfish.problems.PeriodicDensityWave(tfinal=0.5, fluid='gravs')
+    problem = pyfish.problems.PeriodicDensityWave(resolution=[128], tfinal=2.5, fluid='gravs')
     #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
     #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravp')
-    problem = pyfish.problems.BrioWuShocktube()
-    psolver = pyfish.gravity.PoissonSolver1d()
+    #problem = pyfish.problems.BrioWuShocktube()
     mara = MaraEvolutionOperator(problem)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
+    mara.poisson_solver = pyfish.gravity.PoissonSolver1d()
+
+    mara.update_gravity()
+    mara.set_boundary()
 
     # Status setup
     status = SimulationStatus()
@@ -218,8 +241,9 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = False
+    plot_initial = True
     plot_final = True
+    problem.plot_fields.append('vx')
 
     if plot_interactive:
         import matplotlib.pyplot as plt
@@ -265,7 +289,7 @@ def main():
 def plot(mara, fields, show=True, **kwargs):
     import matplotlib.pyplot as plt
     lines = { }
-
+    x, y, z = mara.coordinate_grid()
     try:
         axes = plot.axes
     except:
@@ -273,7 +297,7 @@ def plot(mara, fields, show=True, **kwargs):
         axes = plot.axes
 
     for ax, f in zip(axes, fields):
-        lines[f], = ax.plot(mara.fields[f], '-o', label=(
+        lines[f], = ax.plot(x.flat, mara.fields[f], '-o', label=(
                 f + ' ' + kwargs.get('label', '')))
     if show:
         for ax in axes:
@@ -287,12 +311,3 @@ if __name__ == "__main__":
     #p = pstats.Stats('mara_pstats')
     #p.sort_stats('time').print_stats()
     main()
-
-
-    """
-    gravity = psolver.solve(mara.fields['rho'][3:-3])
-    mara.fluid.gravity[3:-3] = gravity
-    mara.boundary.set_boundary(mara)
-    plot(mara, ['rho', 'phi'])
-    exit()
-    """

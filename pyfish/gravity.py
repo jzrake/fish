@@ -46,6 +46,7 @@ class PoissonSolver1dA(object):
 class PoissonSolver1d(object):
     L = 1.0
     four_pi_G = 1.0
+    gradient_method = ['spectral', 'difference'][0]
 
     def __init__(self):
         pass
@@ -60,7 +61,12 @@ class PoissonSolver1d(object):
         phihat[0] = 0.0
         gphhat = 1.j * k * phihat
         phi = ifft(phihat).real
-        gph = ifft(1.j * k * phihat).real
+
+        if gradient_method == 'spectral':
+            gph = ifft(1.j * k * phihat).real
+        elif gradient_method == 'difference':
+            gph = np.gradient(phi, self.L / Nx)
+
         soln = np.zeros(rho.shape + (4,))
         soln[:,0] = phi
         soln[:,1] = gph

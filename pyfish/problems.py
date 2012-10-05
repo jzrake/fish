@@ -98,9 +98,11 @@ class PeriodicDensityWave(TestProblem):
     gamma = 1.4
     p0 = 1.00 # background pressure
     D0 = 1.00 # background density
-    D1 = 0.50 # density fluctuation
+    D1 = 0.10 # density fluctuation
     v0 = 0.00 # velocity of the wave
-    n0 = 4 # integer valued wave-number
+    n0 = 8 # integer valued wave-number
+    plot_fields = ['rho', 'phi']
+
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
 
@@ -109,7 +111,7 @@ class PeriodicDensityWave(TestProblem):
 
     def pinit(self, x, y, z):
         L = self.upper_bounds[0] - self.lower_bounds[0]
-        rho = self.D0 + self.D1 * np.sin(2 * self.n0 * np.pi * x / L)
+        rho = self.D0 + self.D1 * np.cos(2 * self.n0 * np.pi * x / L)
         return [rho, self.p0, self.v0, 0.0, 0.0]
 
     def build_boundary(self, mara):
