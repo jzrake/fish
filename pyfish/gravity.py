@@ -62,9 +62,9 @@ class PoissonSolver1d(object):
         gphhat = 1.j * k * phihat
         phi = ifft(phihat).real
 
-        if gradient_method == 'spectral':
+        if self.gradient_method == 'spectral':
             gph = ifft(1.j * k * phihat).real
-        elif gradient_method == 'difference':
+        elif self.gradient_method == 'difference':
             gph = np.gradient(phi, self.L / Nx)
 
         soln = np.zeros(rho.shape + (4,))

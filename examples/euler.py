@@ -12,7 +12,7 @@ import pyfish
 
 
 class MaraEvolutionOperator(object):
-    def __init__(self, problem):
+    def __init__(self, problem, scheme):
         descr = problem.fluid_descriptor
         X0 = problem.lower_bounds
         X1 = problem.upper_bounds
@@ -20,9 +20,7 @@ class MaraEvolutionOperator(object):
 
         self.shape = tuple([n + 2*ng for n in problem.resolution])
         self.fluid = pyfluids.FluidStateVector(self.shape, descr)
-        self.solver = pyfish.FishSolver()
-        self.solver.reconstruction = "plm"
-        self.solver.riemannsolver = "hll"
+        self.scheme = scheme
 
         if len(self.shape) == 1:
             Nx, Ny, Nz = self.fluid.shape + (1, 1)
@@ -152,7 +150,9 @@ class MaraEvolutionOperator(object):
             ng = self.number_guard_zones()
             G = self.poisson_solver.solve(self.fields['rho'][ng:-ng])
             self.fluid.gravity[ng:-ng] = G
-        except AttributeError:
+        except AttributeError: # no poisson_solver
+            pass
+        except ValueError: # no gravity array
             pass
 
     def validate_gravity(self):
@@ -167,45 +167,45 @@ class MaraEvolutionOperator(object):
         self.update_gravity()
         self.set_boundary()
         self.fluid.from_conserved(U)
-        L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.solver)
+        L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
         S = self.fluid.source_terms()
         return L + S
 
-    def _dUdt1d(self, fluid, solver):
+    def _dUdt1d(self, fluid, scheme):
         Nx, = self.fluid.shape
         dx, = self.dx,
         L = np.zeros([Nx,5])
-        Fiph = solver.intercellflux(fluid[:], dim=0)
+        Fiph = scheme.intercellflux(fluid[:], dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
         return L
 
-    def _dUdt2d(self, fluid, solver):
+    def _dUdt2d(self, fluid, scheme):
         Nx, Ny = self.fluid.shape
         dx, dy = self.dx, self.dy
         L = np.zeros([Nx,Ny,5])
         for j in range(Ny):
-            Fiph = solver.intercellflux(fluid[:,j], dim=0)
+            Fiph = scheme.intercellflux(fluid[:,j], dim=0)
             L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
         for i in range(Nx):
-            Giph = solver.intercellflux(fluid[i,:], dim=1)
+            Giph = scheme.intercellflux(fluid[i,:], dim=1)
             L[i,1:] += -(Giph[1:] - Giph[:-1]) / dy
         return L
 
-    def _dUdt3d(self, fluid, solver):
+    def _dUdt3d(self, fluid, scheme):
         Nx, Ny, Nz = self.fluid.shape
         dx, dy, dz = self.dx, self.dy, self.dz
         L = np.zeros([Nx,Ny,Nz,5])
         for j in range(Ny):
             for k in range(Nz):
-                Fiph = solver.intercellflux(fluid[:,j,k], dim=0)
+                Fiph = scheme.intercellflux(fluid[:,j,k], dim=0)
                 L[1:,j,k] += -(Fiph[1:] - Fiph[:-1]) / dx
         for k in range(Nz):
             for i in range(Nx):
-                Giph = solver.intercellflux(fluid[i,:,k], dim=1)
+                Giph = scheme.intercellflux(fluid[i,:,k], dim=1)
                 L[i,1:,k] += -(Giph[1:] - Giph[:-1]) / dy
         for i in range(Nx):
             for j in range(Ny):
-                Hiph = solver.intercellflux(fluid[i,j,:], dim=2)
+                Hiph = scheme.intercellflux(fluid[i,j,:], dim=2)
                 L[i,j,1:] += -(Hiph[1:] - Hiph[:-1]) / dz
         return L
 
@@ -215,11 +215,20 @@ class SimulationStatus:
 
 
 def main():
-    problem = pyfish.problems.PeriodicDensityWave(resolution=[128], tfinal=2.5, fluid='gravs')
+    problem_cfg = {'resolution': [128],
+                   'tfinal': 5.0,
+                   'fluid': 'gravs'}
+
+    problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
     #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravp')
     #problem = pyfish.problems.BrioWuShocktube()
-    mara = MaraEvolutionOperator(problem)
+
+    scheme = pyfish.FishSolver()
+    scheme.reconstruction = "none"
+    scheme.riemannsolver = "hllc"
+
+    mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
     mara.poisson_solver = pyfish.gravity.PoissonSolver1d()

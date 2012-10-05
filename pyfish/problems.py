@@ -100,11 +100,13 @@ class PeriodicDensityWave(TestProblem):
     D0 = 1.00 # background density
     D1 = 0.10 # density fluctuation
     v0 = 0.00 # velocity of the wave
-    n0 = 8 # integer valued wave-number
-    plot_fields = ['rho', 'phi']
+    n0 = 4 # integer valued wave-number
+    plot_fields = ['rho']
 
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
+        if self.fluid in ['gravs', 'gravp']:
+            self.plot_fields.append('phi')
 
     def ginit(self, x, y, z):
         return [0.0, 0.0, 0.0, 0.0]
