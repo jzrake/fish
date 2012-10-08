@@ -1,7 +1,7 @@
 
 import numpy as np
 import pyfluids
-from pyfish import boundary, driving
+from pyfish import boundary, driving, gravity
 
 
 class TestProblem(object):
@@ -40,10 +40,6 @@ class OneDimensionalUpsidedownGaussian(TestProblem):
     sig = 0.05
     sie = 2.00
     ph0 = 1.0
-    def ginit(self, x, y, z):
-        phi = -self.ph0 * np.exp(-0.5 * x**2 / self.sig**2)
-        gph = -x/self.sig**2 * phi
-        return [phi, gph, 0.0, 0.0]
 
     def pinit(self, x, y, z):
         phi = self.ginit(x, y, z)[0]
@@ -52,6 +48,11 @@ class OneDimensionalUpsidedownGaussian(TestProblem):
         rho = D0 * np.exp(-phi / (e0 * (self.gamma - 1.0)))
         pre = rho * e0 * (self.gamma - 1.0)
         return [rho, pre, 0.0, 0.0, 0.0]
+
+    def ginit(self, x, y, z):
+        phi = -self.ph0 * np.exp(-0.5 * x**2 / self.sig**2)
+        gph = -x/self.sig**2 * phi
+        return [phi, gph, 0.0, 0.0]
 
     def build_boundary(self, mara):
         ng = mara.number_guard_zones()
@@ -107,14 +108,15 @@ class PeriodicDensityWave(TestProblem):
         super(self.__class__, self).__init__(*args, **kwargs)
         if self.fluid in ['gravs', 'gravp']:
             self.plot_fields.append('phi')
-
-    def ginit(self, x, y, z):
-        return [0.0, 0.0, 0.0, 0.0]
+            self.poisson_solver = gravity.PoissonSolver1d()
 
     def pinit(self, x, y, z):
         L = self.upper_bounds[0] - self.lower_bounds[0]
         rho = self.D0 + self.D1 * np.cos(2 * self.n0 * np.pi * x / L)
         return [rho, self.p0, self.v0, 0.0, 0.0]
+
+    def ginit(self, x, y, z):
+        return [0.0, 0.0, 0.0, 0.0]
 
     def build_boundary(self, mara):
         return boundary.Periodic()
@@ -124,6 +126,7 @@ class BrioWuShocktube(TestProblem):
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 0.2
+
     def pinit(self, x, y, z):
         if x > 0.0:
             return [0.125, 0.100, 0.0, 0.0, 0.0]

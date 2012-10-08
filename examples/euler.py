@@ -21,11 +21,8 @@ class MaraEvolutionOperator(object):
         self.shape = tuple([n + 2*ng for n in problem.resolution])
         self.fluid = pyfluids.FluidStateVector(self.shape, descr)
         self.scheme = scheme
-        try:
-            self.driving = problem.driving
-        except AttributeError:
-            # problem has no driving module
-            pass
+        self.driving = getattr(problem, 'driving', None)
+        self.poisson_solver = getattr(problem, 'poisson_solver', None)
 
         if len(self.shape) == 1:
             Nx, Ny, Nz = self.fluid.shape + (1, 1)
@@ -162,6 +159,8 @@ class MaraEvolutionOperator(object):
         self.boundary.set_boundary(self)
 
     def update_gravity(self):
+        if self.poisson_solver is None:
+            return
         if len(self.shape) > 1:
             raise NotImplementedError
         try:
@@ -186,7 +185,7 @@ class MaraEvolutionOperator(object):
 
     def dUdt(self, U):
         self.fluid.from_conserved(U)
-        #self.update_gravity()
+        self.update_gravity()
         self.set_boundary()
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
         S = self.fluid.source_terms()
@@ -241,8 +240,8 @@ def main():
                    'tfinal': 2.0,
                    'fluid': 'gravs'}
     #problem = pyfish.problems.BrioWuShocktube()
-    #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
-    problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
+    problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
+    #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
     # Status setup
     status = SimulationStatus()
@@ -269,7 +268,7 @@ def main():
     mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
-    #mara.poisson_solver = pyfish.gravity.PoissonSolver1d()
+
     #mara.update_gravity()
     mara.set_boundary()
 
