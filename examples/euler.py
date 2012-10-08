@@ -21,6 +21,11 @@ class MaraEvolutionOperator(object):
         self.shape = tuple([n + 2*ng for n in problem.resolution])
         self.fluid = pyfluids.FluidStateVector(self.shape, descr)
         self.scheme = scheme
+        try:
+            self.driving = problem.driving
+        except AttributeError:
+            # problem has no driving module
+            pass
 
         if len(self.shape) == 1:
             Nx, Ny, Nz = self.fluid.shape + (1, 1)
@@ -41,13 +46,13 @@ class MaraEvolutionOperator(object):
     def fields(self):
         P = self.fluid.primitive
         G = self.fluid.gravity
-        return {'rho': P[:,0],
-                'pre': P[:,1],
-                'vx' : P[:,2],
-                'vy' : P[:,3],
-                'vz' : P[:,4],
-                'phi': G[:,0] if self.fluid.descriptor.ngravity else None,
-                'gph': G[:,1] if self.fluid.descriptor.ngravity else None}
+        return {'rho': P[...,0],
+                'pre': P[...,1],
+                'vx' : P[...,2],
+                'vy' : P[...,3],
+                'vz' : P[...,4],
+                'phi': G[...,0] if self.fluid.descriptor.ngravity else None,
+                'gph': G[...,1] if self.fluid.descriptor.ngravity else None}
 
     def write_checkpoint(self, status, dir=".", update_status=True, **extras):
         if update_status:
@@ -139,6 +144,17 @@ class MaraEvolutionOperator(object):
             L3 = self.dUdt(U0 + (0.5*dt) * L2)
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
+
+        try:
+            ng = self.number_guard_zones()
+            S = self.driving.source_terms(self.fluid.primitive[ng:-ng,ng:-ng])
+            U1[ng:-ng,ng:-ng] += S * dt
+            self.driving.advance(dt)
+        except AttributeError:
+            # no driving module
+            pass
+
+        self.fluid.from_conserved(U1)
         self.boundary.set_boundary(self)
         return time.clock() - start
 
@@ -146,6 +162,8 @@ class MaraEvolutionOperator(object):
         self.boundary.set_boundary(self)
 
     def update_gravity(self):
+        if len(self.shape) > 1:
+            raise NotImplementedError
         try:
             ng = self.number_guard_zones()
             G = self.poisson_solver.solve(self.fields['rho'][ng:-ng])
@@ -156,17 +174,20 @@ class MaraEvolutionOperator(object):
             pass
 
     def validate_gravity(self):
+        if len(self.shape) > 1:
+            raise NotImplementedError
         import matplotlib.pyplot as plt
+        ng = self.number_guard_zones()
         phi0 = self.fields['phi']
         gph0 = self.fields['gph']
         gph1 = np.gradient(phi0, self.dx)
-        plt.semilogy(abs(((gph1 - gph0))[3:-3]))
+        plt.semilogy(abs(((gph1 - gph0))[ng:-ng]))
         plt.show()
 
     def dUdt(self, U):
-        self.update_gravity()
-        self.set_boundary()
         self.fluid.from_conserved(U)
+        #self.update_gravity()
+        self.set_boundary()
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
         S = self.fluid.source_terms()
         return L + S
@@ -174,7 +195,7 @@ class MaraEvolutionOperator(object):
     def _dUdt1d(self, fluid, scheme):
         Nx, = self.fluid.shape
         dx, = self.dx,
-        L = np.zeros([Nx,5])
+        L = np.zeros_like(fluid.primitive)
         Fiph = scheme.intercellflux(fluid[:], dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
         return L
@@ -182,7 +203,7 @@ class MaraEvolutionOperator(object):
     def _dUdt2d(self, fluid, scheme):
         Nx, Ny = self.fluid.shape
         dx, dy = self.dx, self.dy
-        L = np.zeros([Nx,Ny,5])
+        L = np.zeros_like(fluid.primitive)
         for j in range(Ny):
             Fiph = scheme.intercellflux(fluid[:,j], dim=0)
             L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
@@ -194,7 +215,7 @@ class MaraEvolutionOperator(object):
     def _dUdt3d(self, fluid, scheme):
         Nx, Ny, Nz = self.fluid.shape
         dx, dy, dz = self.dx, self.dy, self.dz
-        L = np.zeros([Nx,Ny,Nz,5])
+        L = np.zeros_like(fluid.primitive)
         for j in range(Ny):
             for k in range(Nz):
                 Fiph = scheme.intercellflux(fluid[:,j,k], dim=0)
@@ -215,26 +236,13 @@ class SimulationStatus:
 
 
 def main():
+    # Problem options
     problem_cfg = {'resolution': [128],
-                   'tfinal': 5.0,
+                   'tfinal': 2.0,
                    'fluid': 'gravs'}
-
-    problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
-    #problem = pyfish.problems.OneDimensionalUpsidedownGaussian()
-    #problem = pyfish.problems.OneDimensionalPolytrope(tfinal=1.0, fluid='gravp')
     #problem = pyfish.problems.BrioWuShocktube()
-
-    scheme = pyfish.FishSolver()
-    scheme.reconstruction = "none"
-    scheme.riemannsolver = "hllc"
-
-    mara = MaraEvolutionOperator(problem, scheme)
-    mara.initial_model(problem.pinit, problem.ginit)
-    mara.boundary = problem.build_boundary(mara)
-    mara.poisson_solver = pyfish.gravity.PoissonSolver1d()
-
-    mara.update_gravity()
-    mara.set_boundary()
+    #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
+    problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
     # Status setup
     status = SimulationStatus()
@@ -250,9 +258,20 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = True
+    plot_initial = False
     plot_final = True
-    problem.plot_fields.append('vx')
+    plot = [plot1d, plot2d][len(problem.resolution) - 1]
+
+    scheme = pyfish.FishSolver()
+    scheme.reconstruction = "plm"
+    scheme.riemannsolver = "hllc"
+
+    mara = MaraEvolutionOperator(problem, scheme)
+    mara.initial_model(problem.pinit, problem.ginit)
+    mara.boundary = problem.build_boundary(mara)
+    #mara.poisson_solver = pyfish.gravity.PoissonSolver1d()
+    #mara.update_gravity()
+    mara.set_boundary()
 
     if plot_interactive:
         import matplotlib.pyplot as plt
@@ -263,6 +282,8 @@ def main():
         plot(mara, plot_fields, show=False, label='start')
 
     while status.time_current < problem.tfinal:
+        # print (mara.fields['vx']**2).mean()**0.5
+
         if plot_interactive:
             for f in plot_fields:
                 lines[f].set_ydata(mara.fields[f])
@@ -295,15 +316,15 @@ def main():
         plot(mara, plot_fields, show=True, label='end')
 
 
-def plot(mara, fields, show=True, **kwargs):
+def plot1d(mara, fields, show=True, **kwargs):
     import matplotlib.pyplot as plt
     lines = { }
     x, y, z = mara.coordinate_grid()
     try:
-        axes = plot.axes
+        axes = plot1d.axes
     except:
-        plot.axes = [plt.subplot(len(fields),1,n+1) for n,f in enumerate(fields)]
-        axes = plot.axes
+        plot1d.axes = [plt.subplot(len(fields),1,n+1) for n,f in enumerate(fields)]
+        axes = plot1d.axes
 
     for ax, f in zip(axes, fields):
         lines[f], = ax.plot(x.flat, mara.fields[f], '-o', label=(
@@ -311,6 +332,27 @@ def plot(mara, fields, show=True, **kwargs):
     if show:
         for ax in axes:
             ax.legend()
+        plt.show()
+    return lines
+
+
+def plot2d(mara, fields, show=True, **kwargs):
+    import matplotlib.pyplot as plt
+    lines = { }
+    x, y, z = mara.coordinate_grid()
+    ng = mara.number_guard_zones()
+    try:
+        axes = plot2d.axes
+    except:
+        nr = 2
+        nc = np.ceil(len(fields) / float(nr))
+        plot2d.axes = [plt.subplot(nc,nr,n+1) for n,f in enumerate(fields)]
+        axes = plot2d.axes
+    for ax, f in zip(axes, fields):
+        lines[f] = ax.imshow(mara.fields[f][ng:-ng,ng:-ng].T, interpolation='nearest')
+    if show:
+        for ax, f in zip(axes, fields):
+            ax.set_title(f)
         plt.show()
     return lines
 

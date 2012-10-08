@@ -77,3 +77,14 @@ class Periodic(BoundaryConditions):
             X[:+ng] = X[-2*ng:-ng]
             X[-ng:] = X[+ng:+2*ng]
         mara.fluid.from_conserved(U)
+
+    def set_boundary2d(self, mara):
+        ng = mara.number_guard_zones()
+        U = mara.fluid.conserved()
+        G = mara.fluid.gravity
+        for X in [U, G]:
+            X[:+ng,:] = X[-2*ng:-ng,:]
+            X[-ng:,:] = X[+ng:+2*ng,:]
+            X[:,:+ng] = X[:,-2*ng:-ng]
+            X[:,-ng:] = X[:,+ng:+2*ng]
+        mara.fluid.from_conserved(U)

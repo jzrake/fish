@@ -1,7 +1,7 @@
 
 import numpy as np
 import pyfluids
-from pyfish import boundary
+from pyfish import boundary, driving
 
 
 class TestProblem(object):
@@ -101,7 +101,7 @@ class PeriodicDensityWave(TestProblem):
     D1 = 0.10 # density fluctuation
     v0 = 0.00 # velocity of the wave
     n0 = 4 # integer valued wave-number
-    plot_fields = ['rho']
+    plot_fields = ['rho', 'vx']
 
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
@@ -117,7 +117,6 @@ class PeriodicDensityWave(TestProblem):
         return [rho, self.p0, self.v0, 0.0, 0.0]
 
     def build_boundary(self, mara):
-        ng = mara.number_guard_zones()
         return boundary.Periodic()
 
 
@@ -130,6 +129,22 @@ class BrioWuShocktube(TestProblem):
             return [0.125, 0.100, 0.0, 0.0, 0.0]
         else:
             return [1.000, 1.000, 0.0, 0.0, 0.0]
+
+
+class DrivenTurbulence2d(TestProblem):
+    fluid = 'nrhyd'
+    gamma = 1.4
+    tfinal = 1.0
+    resolution = [128, 128]
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        self.driving = driving.DrivingModule2d(self.resolution)
+
+    def pinit(self, x, y, z):
+        return [1.0, 1.0, 0.0, 0.0, 0.0]
+
+    def build_boundary(self, mara):
+        return boundary.Periodic()
 
 
 def polytrope3d(x, y, z):
