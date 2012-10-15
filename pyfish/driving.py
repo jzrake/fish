@@ -1,5 +1,4 @@
 
-
 import numpy as np
 from numpy.fft import *
 
@@ -15,23 +14,13 @@ class DrivingModule2d(object):
         self._sol = np.zeros(self._shape, dtype=np.complex)
         self._rms = rms
         Kx, Ky, K = self.wave_number()
-        self._totpower = self.amplitude(K, normalized=False).mean()
-        print "total power in driving field", self._totpower
+        self._totpower = self.power_spectrum(K, normalized=False).mean()
 
     def advance(self, dt):
         dx = self._rng.normal(0.0, (2*dt)**0.5, size=self._shape)
         dy = self._rng.normal(0.0, (2*dt)**0.5, size=self._shape) * 1.j
         t, s = self.theta, self.sigma
         self._sol += -t * self._sol * dt + (s*dx + s*dy)
-
-    def amplitude(self, k, normalized=True):
-        k[abs(k) < 1e-12] = 1e-12
-        k0 = 0.1
-        Pk = np.exp(-(k/k0)**2) * (k/k0)**8
-        if normalized:
-            return Pk / self._totpower * self._rms**2
-        else:
-            return Pk
 
     def wave_number(self):
         L = self.L
@@ -47,20 +36,29 @@ class DrivingModule2d(object):
             return (Fx**2 + Fy**2).mean()
         else:
             Kx, Ky, K = self.wave_number()
-            return self.amplitude(K).mean()
+            return self.power_spectrum(K).mean()
 
-    def power_spectrum(self, bins=64):
-        Kx, Ky, K = self.wave_number()
-        Fx, Fy = self.field
-        Gx, Gy = fftn(Fx), fftn(Fy)
-        w = abs(Gx)**2 + abs(Gy)**2
-        w /= w.size
-        K[0,0] = 1.0
-        bins = np.logspace(np.log10(K.min()), np.log10(K.max()), bins)
-        Nk, b = np.histogram(K, bins=bins)
-        Pk, b = np.histogram(K, bins=bins, weights=w)
-        Nk[Nk == 0] = 1.0
-        return Pk / Nk, b
+    def power_spectrum(self, k=None, normalized=True, bins=None):
+        if bins is None:
+            k[abs(k) < 1e-12] = 1e-12
+            k0 = 0.1
+            Pk = np.exp(-(k/k0)**2) * (k/k0)**8
+            if normalized:
+                return Pk / self._totpower * self._rms**2
+            else:
+                return Pk
+        else:
+            Kx, Ky, K = self.wave_number()
+            Fx, Fy = self.field
+            Gx, Gy = fftn(Fx), fftn(Fy)
+            w = abs(Gx)**2 + abs(Gy)**2
+            w /= w.size
+            K[0,0] = 1.0
+            bins = np.logspace(np.log10(K.min()), np.log10(K.max()), bins)
+            Nk, b = np.histogram(K, bins=bins)
+            Pk, b = np.histogram(K, bins=bins, weights=w)
+            Nk[Nk == 0] = 1.0
+            return Pk / Nk, b
 
     def source_terms(self, P):
         Fx, Fy = self.field
@@ -76,7 +74,7 @@ class DrivingModule2d(object):
     def field(self):
         Nx, Ny = self._shape
         Kx, Ky, K = self.wave_number()
-        P = self.amplitude(K)
+        P = self.power_spectrum(K)
         fk = (P / K**2 * K.size)**0.5
         fk[0,0] = 0.0
         Fx = ifftn(-1.j * Ky * self._sol * fk).real
@@ -89,7 +87,7 @@ def test_power_spectrum(driving):
     Pk, bins = driving.power_spectrum(bins=32)
     k = 0.5*(bins[1:] + bins[:-1])
     plt.loglog(k, Pk, label='P')
-    plt.loglog(k, driving.amplitude(k), label='amplitude')
+    plt.loglog(k, driving.power_spectrum(k), label='amplitude')
     plt.show()
 
 
