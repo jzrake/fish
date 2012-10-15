@@ -159,13 +159,27 @@ class MaraEvolutionOperator(object):
         self.boundary.set_boundary(self)
 
     def update_gravity(self):
+        """
+        Notes:
+        ------
+
+        (1) Only works in 1d for now.
+
+        (2) To see the bug introduced by not accounting for the background
+        density, do
+
+        self.fluid.descriptor.rhobar = 0.0 #rhobar
+
+        """
         if self.poisson_solver is None:
             return
         if len(self.shape) > 1:
             raise NotImplementedError
         try:
             ng = self.number_guard_zones()
-            G = self.poisson_solver.solve(self.fields['rho'][ng:-ng])
+            G, rhobar = self.poisson_solver.solve(self.fields['rho'][ng:-ng],
+                                                  retrhobar=True)
+            self.fluid.descriptor.rhobar = rhobar
             self.fluid.gravity[ng:-ng] = G
         except AttributeError: # no poisson_solver
             pass
@@ -236,9 +250,9 @@ class SimulationStatus:
 
 def main():
     # Problem options
-    problem_cfg = {'resolution': [128],
-                   'tfinal': 2.0,
-                   'fluid': 'gravs'}
+    problem_cfg = dict(resolution=[128],
+                       tfinal=0.1,
+                       fluid='gravs', v0=0.0)
     #problem = pyfish.problems.BrioWuShocktube()
     problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
@@ -257,7 +271,7 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = False
+    plot_initial = True
     plot_final = True
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
@@ -269,7 +283,7 @@ def main():
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
-    #mara.update_gravity()
+    mara.update_gravity()
     mara.set_boundary()
 
     if plot_interactive:
@@ -281,8 +295,6 @@ def main():
         plot(mara, plot_fields, show=False, label='start')
 
     while status.time_current < problem.tfinal:
-        # print (mara.fields['vx']**2).mean()**0.5
-
         if plot_interactive:
             for f in plot_fields:
                 lines[f].set_ydata(mara.fields[f])

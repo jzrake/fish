@@ -98,8 +98,8 @@ class PeriodicDensityWave(TestProblem):
     fluid = 'nrhyd'
     gamma = 1.4
     p0 = 1.00 # background pressure
-    D0 = 1.00 # background density
-    D1 = 0.10 # density fluctuation
+    D0 = 10.00 # background density
+    D1 = 1.00 # density fluctuation
     v0 = 0.00 # velocity of the wave
     n0 = 4 # integer valued wave-number
     plot_fields = ['rho', 'vx']
@@ -109,6 +109,7 @@ class PeriodicDensityWave(TestProblem):
         if self.fluid in ['gravs', 'gravp']:
             self.plot_fields.append('phi')
             self.poisson_solver = gravity.PoissonSolver1d()
+            #self.fluid_descriptor.rhobar = self.D0
 
     def pinit(self, x, y, z):
         L = self.upper_bounds[0] - self.lower_bounds[0]

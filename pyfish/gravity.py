@@ -51,7 +51,7 @@ class PoissonSolver1d(object):
     def __init__(self):
         pass
 
-    def solve(self, rho):
+    def solve(self, rho, retrhobar=False):
         Nx, = rho.shape
         k = fftfreq(Nx) * 2*np.pi*Nx
         k[0] = 1.0
@@ -70,7 +70,10 @@ class PoissonSolver1d(object):
         soln = np.zeros(rho.shape + (4,))
         soln[:,0] = phi
         soln[:,1] = gph
-        return soln
+        if retrhobar:
+            return soln, rhobar.real
+        else:
+            return soln
 
     def self_test(self):
         pass
