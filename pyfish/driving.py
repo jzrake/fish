@@ -91,6 +91,25 @@ def test_power_spectrum(driving):
     plt.show()
 
 
+def test_pdf(driving):
+    import matplotlib.pyplot as plt
+    from scipy.optimize import leastsq
+    Fx, Fy = driving.field
+    kwargs = dict(bins=200, histtype='stepfilled', normed=True, alpha=0.5)
+    Nx, binsx, patchesx = plt.hist(Fx.flat, **kwargs)
+    Ny, binsy, patchesy = plt.hist(Fy.flat, **kwargs)
+
+    fitfunc = lambda p, x: (2*np.pi*p[1]**2)**-0.5 * np.exp(-(x - p[0])**2 / (2*p[1]**2))
+    errfunc = lambda p, x, y: fitfunc(p, x) - y
+
+    x = 0.5*(binsx[1:] + binsx[:-1])
+    p0 = [0.0, 1.0]
+    p1, success = leastsq(errfunc, p0, args=(x, Nx))
+    print "mu = %f, sigma = %f" % tuple(p1)
+    plt.plot(x, [fitfunc(p1, xi) for xi in x])
+    plt.show()
+
+
 def test_streamlines(driving):
     import matplotlib.pyplot as plt
     from pyfish.streamplot import streamplot
@@ -161,11 +180,12 @@ def test_power():
 if __name__ == "__main__":
     N = 256
     driving = DrivingModule2d([N,N], rms=1.0)
-    for i in range(48):
+    for i in range(12):
         print driving.total_power(), driving.total_power(actual=True)
         driving.advance(0.1)
 
-    test_power_spectrum(driving)
+    #test_power_spectrum(driving)
+    test_pdf(driving)
     #test_streamlines(driving)
     #test_image(driving)
     #test_divergence(driving)
