@@ -23,6 +23,7 @@ class MaraEvolutionOperator(object):
         self.scheme = scheme
         self.driving = getattr(problem, 'driving', None)
         self.poisson_solver = getattr(problem, 'poisson_solver', None)
+        self.pressure_floor = 1e-6
 
         if len(self.shape) == 1:
             Nx, Ny, Nz = self.fluid.shape + (1, 1)
@@ -198,7 +199,18 @@ class MaraEvolutionOperator(object):
         plt.show()
 
     def dUdt(self, U):
+        if (U[...,0] < 0.0).any():
+            raise RuntimeError("negative density (conserved)")
+        if (U[...,1] < 0.0).any():
+            raise RuntimeError("negative energy")
         self.fluid.from_conserved(U)
+        P = self.fluid.primitive
+        if (P[...,0] < 0.0).any():
+            raise RuntimeError("negative density (primitive)")
+        if (P[...,1] < 0.0).any():
+            #P[P[...,1] < self.pressure_floor, 1] = self.pressure_floor
+            #print "set pressure floor on some zones"
+            raise RuntimeError("negative pressure")
         self.update_gravity()
         self.set_boundary()
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
@@ -250,11 +262,12 @@ class SimulationStatus:
 
 def main():
     # Problem options
-    problem_cfg = dict(resolution=[128],
-                       tfinal=0.1,
-                       fluid='gravs', v0=0.0)
-    #problem = pyfish.problems.BrioWuShocktube()
-    problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
+    problem_cfg = dict(resolution=[256],
+                       tfinal=0.01,
+                       fluid='nrhyd', pauls_fix=True)
+    #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
+    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd')
+    #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
     # Status setup
@@ -271,12 +284,12 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = True
+    plot_initial = False
     plot_final = True
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.reconstruction = "plm"
+    scheme.reconstruction = "weno5"
     scheme.riemannsolver = "hllc"
 
     mara = MaraEvolutionOperator(problem, scheme)
@@ -302,7 +315,11 @@ def main():
 
         ml = abs(mara.fluid.eigenvalues()).max()
         dt = status.CFL * mara.min_grid_spacing() / ml
-        wall_step = mara.advance(dt, rk=3)
+        try:
+            wall_step = mara.advance(dt, rk=3)
+        except RuntimeError as e:
+            print e
+            break
 
         status.time_step = dt
         status.time_current += status.time_step
@@ -369,7 +386,4 @@ def plot2d(mara, fields, show=True, **kwargs):
 
 
 if __name__ == "__main__":
-    #cProfile.run('main()', 'mara_pstats')
-    #p = pstats.Stats('mara_pstats')
-    #p.sort_stats('time').print_stats()
     main()

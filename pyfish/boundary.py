@@ -58,6 +58,7 @@ class Inflow(BoundaryConditions):
     def set_boundary1d(self, mara):
         ng = mara.number_guard_zones()
         U = mara.fluid.conserved()
+        G = mara.fluid.gravity
         U[:+ng] = self.UL
         U[-ng:] = self.UR
         G[:+ng] = self.GL

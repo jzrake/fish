@@ -66,29 +66,50 @@ class OneDimensionalPolytrope(TestProblem):
     '''
     fluid = 'gravs' # or gravp, grave
     gamma = 2.0
-    D0 = 1.0
-    R = 1.1
+    Dc = 1.0 # central density
+    Da = 1e-2 # atmosphere density
+    Pa = 1e-3 # atmosphere pressure
+    R = 0.25
+    four_pi_G = 1.0
+    plot_fields = ['rho', 'pre', 'phi', 'gph']
+    pauls_fix = True
+
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
+        if self.selfgrav:
+            self.poisson_solver = gravity.PoissonSolver1d()
 
     def ginit(self, x, y, z):
         R = self.R
-        phi = -(self.D0 / (np.pi/R)**2) * np.cos(np.pi * x / R)
-        gph = +(self.D0 / (np.pi/R)**1) * np.sin(np.pi * x / R)
+        s = (2 * self.Dc * R) / np.pi # enclosed mass per unit area
+        if abs(x) < R/2:
+            phi = -(self.Dc / (np.pi/R)**2) * np.cos(np.pi*x/R) * self.four_pi_G
+            gph = +(self.Dc / (np.pi/R)**1) * np.sin(np.pi*x/R) * self.four_pi_G
+        else:
+            phi = abs(x) * self.four_pi_G * s
+            gph = self.four_pi_G * s * np.sign(x)
         return [phi, gph, 0.0, 0.0]
 
     def pinit(self, x, y, z):
         R = self.R
         K = 0.5 * R**2 / np.pi**2
-        rho = self.D0 * np.cos(np.pi * x / R)
-        if rho < 1e-8:
-            rho = 1e-8 # prevent zero density
-        pre = K * rho**2.0
+        if abs(x) < R/2:
+            rho = self.Dc * np.cos(np.pi * x / R)
+            pre = K * rho**2.0
+        else:
+            if self.pauls_fix:
+                rho = 0.0
+                pre = 0.0
+            else:
+                rho = self.Da
+                pre = K * rho**2.0
+        if self.pauls_fix:
+            if rho < self.Da: rho = self.Da
+            if pre < self.Pa: pre = self.Pa
         return [rho, pre, 0.0, 0.0, 0.0]
 
     def build_boundary(self, mara):
-        ng = mara.number_guard_zones()
-        return boundary.Inflow(mara.fluid[0:ng], mara.fluid[-ng:])
+        return boundary.Periodic()
 
 
 class PeriodicDensityWave(TestProblem):
@@ -109,7 +130,7 @@ class PeriodicDensityWave(TestProblem):
         if self.fluid in ['gravs', 'gravp']:
             self.plot_fields.append('phi')
             self.poisson_solver = gravity.PoissonSolver1d()
-            #self.fluid_descriptor.rhobar = self.D0
+            self.fluid_descriptor.rhobar = self.D0
 
     def pinit(self, x, y, z):
         L = self.upper_bounds[0] - self.lower_bounds[0]

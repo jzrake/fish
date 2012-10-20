@@ -26,7 +26,6 @@ cdef class FishSolver(object):
         fish_del(self._c)
 
     def __init__(self):
-        fish_setfluid(self._c, FLUIDS_NRHYD)
         fish_setriemannsolver(self._c, FLUIDS_RIEMANN_HLL)
         fish_setreconstruction(self._c, FISH_NONE)
         fish_setplmtheta(self._c, 2.0)

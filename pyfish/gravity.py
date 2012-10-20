@@ -3,45 +3,6 @@ import numpy as np
 from numpy.fft import *
 
 
-class PoissonSolver1dA(object):
-    '''
-    Solves the equation del^2 phi = rho for one-dimensional periodic arrays rho
-    using FFT's. The return value of the 'solve' function a 4-component array
-    containing phi in soln[:,0] and its gradient in soln[:,1:4].
-
-    Use of FFT's results in a solution to the equation del^2 phi = rho - <rho>,
-    so it's formally wrong whenever there's a net charge (which of course there
-    is for gravity). The lack of a solution follows from the periodicity imposed
-    by the FFT. In 1d, we can obtain an exact solution by adding the quadratic
-    <rho> x^2 / 2 to phi.
-
-    In many cases, it's perfectly fine to use a phi satisfying del^2 phi = rho -
-    <rho>. However, the 'gravp' and 'grave' schemes operate on the assumption of
-    a real solution and thus may require the addition of the quadratic term.
-    '''
-    L = 1.0
-
-    def __init__(self):
-        pass
-
-    def solve(self, x, rho):
-        Nx, = rho.shape
-        k = fftfreq(Nx) * 2*np.pi*Nx
-        k[0] = 1.0
-        rhohat = fft(rho)
-        rhobar = rhohat[0] / rho.size
-        phihat = rhohat / -k**2 + fft(0.5 * rhobar * x**2)
-        gphhat = 1.j * k * phihat
-        phi = ifft(phihat).real
-        gph = ifft(1.j * k * phihat).real
-        soln = np.zeros(rho.shape + (4,))
-        soln[:,0] = phi
-        soln[:,1] = gph
-        return soln
-
-    def self_test(self):
-        pass
-
 
 class PoissonSolver1d(object):
     L = 1.0
@@ -195,3 +156,42 @@ class StaticCentralGravity(object):
         S[...,4] = rho * fz
 
         return (S, phi) if retphi else S
+
+class PoissonSolver1dA(object):
+    '''
+    Solves the equation del^2 phi = rho for one-dimensional periodic arrays rho
+    using FFT's. The return value of the 'solve' function a 4-component array
+    containing phi in soln[:,0] and its gradient in soln[:,1:4].
+
+    Use of FFT's results in a solution to the equation del^2 phi = rho - <rho>,
+    so it's formally wrong whenever there's a net charge (which of course there
+    is for gravity). The lack of a solution follows from the periodicity imposed
+    by the FFT. In 1d, we can obtain an exact solution by adding the quadratic
+    <rho> x^2 / 2 to phi.
+
+    In many cases, it's perfectly fine to use a phi satisfying del^2 phi = rho -
+    <rho>. However, the 'gravp' and 'grave' schemes operate on the assumption of
+    a real solution and thus may require the addition of the quadratic term.
+    '''
+    L = 1.0
+
+    def __init__(self):
+        pass
+
+    def solve(self, x, rho):
+        Nx, = rho.shape
+        k = fftfreq(Nx) * 2*np.pi*Nx
+        k[0] = 1.0
+        rhohat = fft(rho)
+        rhobar = rhohat[0] / rho.size
+        phihat = rhohat / -k**2 + fft(0.5 * rhobar * x**2)
+        gphhat = 1.j * k * phihat
+        phi = ifft(phihat).real
+        gph = ifft(1.j * k * phihat).real
+        soln = np.zeros(rho.shape + (4,))
+        soln[:,0] = phi
+        soln[:,1] = gph
+        return soln
+
+    def self_test(self):
+        pass
