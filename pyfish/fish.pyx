@@ -8,18 +8,22 @@ from libc.stdlib cimport malloc, free
 def inverse_dict(d):
     return dict((v,k) for k, v in d.iteritems())
 
-_schemes         = {"godunov" : FISH_GODUNOV,
-                    "spectral": FISH_SPECTRAL}
-_reconstructions = {"pcm"     : FISH_PCM,
-                    "plm"     : FISH_PLM,
-                    "weno5"   : FISH_WENO5}
-_riemannsolvers  = {"hll"     : FLUIDS_RIEMANN_HLL,
-                    "hllc"    : FLUIDS_RIEMANN_HLLC,
-                    "exact"   : FLUIDS_RIEMANN_EXACT}
-_schemes_i = inverse_dict(_schemes)
+_solvertypes     = {"godunov"    : FISH_GODUNOV,
+                    "spectral"   : FISH_SPECTRAL}
+_reconstructions = {"pcm"        : FISH_PCM,
+                    "plm"        : FISH_PLM,
+                    "weno5"      : FISH_WENO5}
+_riemannsolvers  = {"hll"        : FLUIDS_RIEMANN_HLL,
+                    "hllc"       : FLUIDS_RIEMANN_HLLC,
+                    "exact"      : FLUIDS_RIEMANN_EXACT}
+_smoothness      = {"jiangshu96" : FISH_ISK_JIANGSHU96,
+                    "borges08"   : FISH_ISK_BORGES08,
+                    "shenzha10"  : FISH_ISK_SHENZHA10}
+
+_solvertypes_i = inverse_dict(_solvertypes)
 _reconstructions_i = inverse_dict(_reconstructions)
 _riemannsolvers_i = inverse_dict(_riemannsolvers)
-
+_smoothness_i = inverse_dict(_smoothness)
 
 cdef class FishSolver(object):
     def __cinit__(self):
@@ -45,13 +49,13 @@ cdef class FishSolver(object):
         free(fluid)
         return Fiph
 
-    property scheme:
+    property solver_type:
         def __get__(self):
             cdef int ret
-            fish_getparami(self._c, &ret, FISH_SCHEME)
-            return _schemes_i[ret]
+            fish_getparami(self._c, &ret, FISH_SOLVER_TYPE)
+            return _solvertypes_i[ret]
         def __set__(self, mode):
-            fish_setparami(self._c, _schemes[mode], FISH_SCHEME)
+            fish_setparami(self._c, _solvertypes[mode], FISH_SOLVER_TYPE)
 
     property reconstruction:
         def __get__(self):
@@ -69,6 +73,15 @@ cdef class FishSolver(object):
         def __set__(self, mode):
             fish_setparami(self._c, _riemannsolvers[mode], FISH_RIEMANN_SOLVER)
 
+    property smoothness_indicator:
+        def __get__(self):
+            cdef int ret
+            fish_getparami(self._c, &ret, FISH_SMOOTHNESS_INDICATOR)
+            return _smoothness_i[ret]
+        def __set__(self, mode):
+            fish_setparami(self._c, _smoothness[mode],
+                           FISH_SMOOTHNESS_INDICATOR)
+
     property plm_theta:
         def __get__(self):
             cdef double ret
@@ -78,4 +91,14 @@ cdef class FishSolver(object):
             if not 1.0 <= plm_theta <= 2.0:
                 raise ValueError("plm_theta must be between 1 and 2")
             fish_setparamd(self._c, plm_theta, FISH_PLM_THETA)
+
+    property shenzha10_param:
+        def __get__(self):
+            cdef double ret
+            fish_getparamd(self._c, &ret, FISH_SHENZHA10_PARAM)
+            return ret
+        def __set__(self, plm_theta):
+            if not 0.0 <= plm_theta <= 100.0:
+                raise ValueError("shenzha10_param must be between 0 and 100")
+            fish_setparamd(self._c, plm_theta, FISH_SHENZHA10_PARAM)
 

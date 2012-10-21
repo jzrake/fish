@@ -262,11 +262,11 @@ class SimulationStatus:
 
 def main():
     # Problem options
-    problem_cfg = dict(resolution=[256],
-                       tfinal=0.01,
+    problem_cfg = dict(resolution=[128],
+                       tfinal=0.2,
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.1)
+    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.2, plot_fields=['rho'])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -289,9 +289,11 @@ def main():
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.scheme = "spectral"
-    scheme.reconstruction = "plm"
+    scheme.solver_type = ["godunov", "spectral"][1]
+    scheme.reconstruction = "weno5"
     scheme.riemann_solver = "hllc"
+    scheme.shenzha10_param = 100.0
+    scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][0]
 
     mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
@@ -356,7 +358,7 @@ def plot1d(mara, fields, show=True, **kwargs):
         axes = plot1d.axes
 
     for ax, f in zip(axes, fields):
-        lines[f], = ax.plot(x.flat, mara.fields[f], '-o', label=(
+        lines[f], = ax.plot(x.flat, mara.fields[f], '+', mfc='none', label=(
                 f + ' ' + kwargs.get('label', '')))
     if show:
         for ax in axes:

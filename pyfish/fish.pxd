@@ -11,12 +11,32 @@ cdef extern from "fish.h":
         FISH_WENO5, # weno-5 reconstruction
         FISH_GODUNOV, # conservative finite volume Riemann-solver intercell fluxes
         FISH_SPECTRAL, # conservative finite differencing of characteristic fields
-        
-        FISH_SCHEME,
+
+        # ---------------------------------------------------------------------------
+        # smoothness indicators for WENO reconstruction
+        # ---------------------------------------------------------------------------
+        FISH_ISK_JIANGSHU96, # original smoothness indicator of Jiang & Shu (1996)
+        FISH_ISK_BORGES08, # improved by Borges (2008) NOTE: might be 4th order
+        FISH_ISK_SHENZHA10, # improved by Shen & Zha (2010)
+
+        # ---------------------------------------------------------------------------
+        # names of parameters for solver description
+        # ---------------------------------------------------------------------------
+
+        # ------------------
+        # integer parameters
+        # ------------------
+        FISH_SOLVER_TYPE,
         FISH_RIEMANN_SOLVER,
         FISH_RECONSTRUCTION,
-        FISH_PLM_THETA,
-        
+        FISH_SMOOTHNESS_INDICATOR,
+
+        # -----------------
+        # double parameters
+        # -----------------
+        FISH_PLM_THETA, # [1 -> 2 (most aggressive)]
+        FISH_SHENZHA10_PARAM, # [0 -> ~100 (most aggressive)]
+
         FISH_ERROR_BADARG,
 
     struct fish_state
