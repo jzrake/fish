@@ -5,9 +5,19 @@ cimport numpy as np
 import numpy as np
 
 cdef extern from "fish.h":
-    int FISH_NONE           =   -42
-    int FISH_PLM            =   -43
-    int FISH_WENO5          =   -44
+    enum:
+        FISH_PCM, # piecewise constant reconstruction
+        FISH_PLM, # piecewise linear reconstruction
+        FISH_WENO5, # weno-5 reconstruction
+        FISH_GODUNOV, # conservative finite volume Riemann-solver intercell fluxes
+        FISH_SPECTRAL, # conservative finite differencing of characteristic fields
+        
+        FISH_SCHEME,
+        FISH_RIEMANN_SOLVER,
+        FISH_RECONSTRUCTION,
+        FISH_PLM_THETA,
+        
+        FISH_ERROR_BADARG,
 
     struct fish_state
 
@@ -16,13 +26,10 @@ cdef extern from "fish.h":
     int fish_evolve(fish_state *S, double dt)
     int fish_intercellflux(fish_state *S, fluids_state **fluid, double *F, int N,
                            int dim)
-    int fish_getriemannsolver(fish_state *S, int *riemannsolver)
-    int fish_setriemannsolver(fish_state *S, int riemannsolver)
-    int fish_getreconstruction(fish_state *S, int *reconstruction)
-    int fish_setreconstruction(fish_state *S, int reconstruction)
-    int fish_getplmtheta(fish_state *S, double *plmtheta)
-    int fish_setplmtheta(fish_state *S, double plmtheta)
-
+    int fish_getparami(fish_state *S, int *param, long flag)
+    int fish_setparami(fish_state *S, int param, long flag)
+    int fish_getparamd(fish_state *S, double *param, long flag)
+    int fish_setparamd(fish_state *S, double param, long flag)
 
 cdef class FishSolver(object):
     cdef fish_state *_c

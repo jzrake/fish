@@ -266,7 +266,7 @@ def main():
                        tfinal=0.01,
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd')
+    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.1)
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -289,8 +289,9 @@ def main():
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.reconstruction = "weno5"
-    scheme.riemannsolver = "hllc"
+    scheme.scheme = "spectral"
+    scheme.reconstruction = "plm"
+    scheme.riemann_solver = "hllc"
 
     mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)

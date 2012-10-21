@@ -8,12 +8,15 @@ from libc.stdlib cimport malloc, free
 def inverse_dict(d):
     return dict((v,k) for k, v in d.iteritems())
 
-_reconstructions = {"none"   : FISH_NONE,
-                    "plm"    : FISH_PLM,
-                    "weno5"  : FISH_WENO5}
-_riemannsolvers  = {"hll"    : FLUIDS_RIEMANN_HLL,
-                    "hllc"   : FLUIDS_RIEMANN_HLLC,
-                    "exact"  : FLUIDS_RIEMANN_EXACT}
+_schemes         = {"godunov" : FISH_GODUNOV,
+                    "spectral": FISH_SPECTRAL}
+_reconstructions = {"pcm"     : FISH_PCM,
+                    "plm"     : FISH_PLM,
+                    "weno5"   : FISH_WENO5}
+_riemannsolvers  = {"hll"     : FLUIDS_RIEMANN_HLL,
+                    "hllc"    : FLUIDS_RIEMANN_HLLC,
+                    "exact"   : FLUIDS_RIEMANN_EXACT}
+_schemes_i = inverse_dict(_schemes)
 _reconstructions_i = inverse_dict(_reconstructions)
 _riemannsolvers_i = inverse_dict(_riemannsolvers)
 
@@ -25,10 +28,9 @@ cdef class FishSolver(object):
     def __dealloc__(self):
         fish_del(self._c)
 
-    def __init__(self):
-        fish_setriemannsolver(self._c, FLUIDS_RIEMANN_HLL)
-        fish_setreconstruction(self._c, FISH_NONE)
-        fish_setplmtheta(self._c, 2.0)
+    def __init__(self, **kwargs):
+        for k,v in kwargs.iteritems():
+            setattr(self, k, v)
 
     def intercellflux(self, states, int dim=0):
         cdef fluids_state **fluid = <fluids_state**>malloc(
@@ -43,29 +45,37 @@ cdef class FishSolver(object):
         free(fluid)
         return Fiph
 
+    property scheme:
+        def __get__(self):
+            cdef int ret
+            fish_getparami(self._c, &ret, FISH_SCHEME)
+            return _schemes_i[ret]
+        def __set__(self, mode):
+            fish_setparami(self._c, _schemes[mode], FISH_SCHEME)
+
     property reconstruction:
         def __get__(self):
             cdef int ret
-            fish_getreconstruction(self._c, &ret)
+            fish_getparami(self._c, &ret, FISH_RECONSTRUCTION)
             return _reconstructions_i[ret]
         def __set__(self, mode):
-            fish_setreconstruction(self._c, _reconstructions[mode])
+            fish_setparami(self._c, _reconstructions[mode], FISH_RECONSTRUCTION)
 
-    property riemannsolver:
+    property riemann_solver:
         def __get__(self):
             cdef int ret
-            fish_getriemannsolver(self._c, &ret)
+            fish_getparami(self._c, &ret, FISH_RIEMANN_SOLVER)
             return _riemannsolvers_i[ret]
         def __set__(self, mode):
-            fish_setriemannsolver(self._c, _riemannsolvers[mode])
+            fish_setparami(self._c, _riemannsolvers[mode], FISH_RIEMANN_SOLVER)
 
     property plm_theta:
         def __get__(self):
             cdef double ret
-            fish_getplmtheta(self._c, &ret)
+            fish_getparamd(self._c, &ret, FISH_PLM_THETA)
             return ret
         def __set__(self, plm_theta):
             if not 1.0 <= plm_theta <= 2.0:
                 raise ValueError("plm_theta must be between 1 and 2")
-            fish_setplmtheta(self._c, plm_theta)
+            fish_setparamd(self._c, plm_theta, FISH_PLM_THETA)
 
