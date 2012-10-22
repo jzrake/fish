@@ -41,10 +41,11 @@ cdef class FishSolver(object):
             states.size * sizeof(fluids_state*))
         cdef int i
         cdef FluidState si
+        cdef int Q = states[0].descriptor.nprimitive
         for i in range(states.size):
             si = states[i]
             fluid[i] = si._c
-        cdef np.ndarray[np.double_t,ndim=2] Fiph = np.zeros([states.size, 5])
+        cdef np.ndarray[np.double_t,ndim=2] Fiph = np.zeros([states.size, Q])
         fish_intercellflux(self._c, fluid, <double*>Fiph.data, states.size, dim)
         free(fluid)
         return Fiph
