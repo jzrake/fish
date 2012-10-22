@@ -266,7 +266,7 @@ def main():
                        tfinal=0.2,
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.2, plot_fields=['rho'])
+    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.2)
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -293,7 +293,7 @@ def main():
     scheme.reconstruction = "weno5"
     scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
-    scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][0]
+    scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][2]
 
     mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
@@ -358,11 +358,17 @@ def plot1d(mara, fields, show=True, **kwargs):
         axes = plot1d.axes
 
     for ax, f in zip(axes, fields):
-        lines[f], = ax.plot(x.flat, mara.fields[f], '+', mfc='none', label=(
+        lines[f], = ax.plot(x.flat, mara.fields[f], '-o', mfc='none', label=(
                 f + ' ' + kwargs.get('label', '')))
     if show:
         for ax in axes:
-            ax.legend()
+            ax.legend(loc='best')
+            yl = ax.get_ylim()
+            ax.set_ylim(yl[0]+1e-8, yl[1]-1e-8)
+        for ax in axes[:-1]:
+            ax.set_xticks([])
+        axes[-1].set_xlabel('position')
+        plt.subplots_adjust(hspace=0.0, wspace=0)
         plt.show()
     return lines
 
