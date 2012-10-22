@@ -266,7 +266,10 @@ def main():
                        tfinal=0.2,
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd', tfinal=0.2)
+    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
+                                              tfinal=0.05,
+                                              geometry='cylindrical',
+                                              resolution=[64,64])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 

@@ -148,9 +148,28 @@ class BrioWuShocktube(TestProblem):
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 0.2
+    geometry = 'planar'
+    direction = 'x'
+
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        if len(self.resolution) == 2:
+            self.plot_fields.append('vy')
 
     def pinit(self, x, y, z):
-        if x > 0.0:
+        if self.geometry == 'planar':
+            r = {'x': x, 'y': y, 'z': z}[self.direction]
+            R = 0.0
+        elif self.geometry == 'cylindrical':
+            r = (x**2 + y**2)**0.5
+            R = 0.125
+        elif self.geometry == 'spherical':
+            r = (x**2 + y**2 + z**2)**0.5
+            R = 0.125
+        else:
+            raise ValueError("invalid problem geometry: %s" % self.geometry)
+
+        if r > R:
             return [0.125, 0.100, 0.0, 0.0, 0.0]
         else:
             return [1.000, 1.000, 0.0, 0.0, 0.0]
