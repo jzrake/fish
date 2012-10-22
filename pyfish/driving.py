@@ -4,6 +4,10 @@ from numpy.fft import *
 
 
 class DrivingModule2d(object):
+    """
+    The power spectrum in this module refers to the 2d profile dP/dk^2, not the 1d
+    power spectrum dP/dk.
+    """
     theta = 1.0 # restoring parameter
     sigma = 1.0 # step size multiplier
     L = 1.0 # domain size
