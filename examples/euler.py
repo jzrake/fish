@@ -265,19 +265,19 @@ class SimulationStatus:
 def main():
     # Problem options
     problem_cfg = dict(resolution=[128],
-                       tfinal=0.2,
+                       tfinal=0.1,
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
     problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
                                               tfinal=0.2,
-                                              geometry='cylindrical',
-                                              resolution=[64,64])
+                                              geometry='spherical',
+                                              resolution=[16,16,16])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.6
+    status.CFL = 0.3
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
@@ -291,7 +291,7 @@ def main():
     plot_interactive = False
     plot_initial = False
     plot_final = True
-    plot = [plot1d, plot2d][len(problem.resolution) - 1]
+    plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
     scheme.solver_type = ["godunov", "spectral"][1]
@@ -389,6 +389,28 @@ def plot2d(mara, fields, show=True, **kwargs):
         axes = plot2d.axes
     for ax, f in zip(axes, fields):
         lines[f] = ax.imshow(mara.fields[f][ng:-ng,ng:-ng].T, interpolation='nearest')
+    if show:
+        for ax, f in zip(axes, fields):
+            ax.set_title(f)
+        plt.show()
+    return lines
+
+
+def plot3d(mara, fields, show=True, **kwargs):
+    import matplotlib.pyplot as plt
+    lines = { }
+    x, y, z = mara.coordinate_grid()
+    ng = mara.number_guard_zones()
+    try:
+        axes = plot2d.axes
+    except:
+        nr = 2
+        nc = np.ceil(len(fields) / float(nr))
+        plot2d.axes = [plt.subplot(nc,nr,n+1) for n,f in enumerate(fields)]
+        axes = plot2d.axes
+    for ax, f in zip(axes, fields):
+        i0 = mara.fields[f].shape[0] / 2
+        lines[f] = ax.imshow(mara.fields[f][i0,ng:-ng,ng:-ng].T, interpolation='nearest')
     if show:
         for ax, f in zip(axes, fields):
             ax.set_title(f)
