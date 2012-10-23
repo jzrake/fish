@@ -36,7 +36,7 @@ cdef class FishSolver(object):
         for k,v in kwargs.iteritems():
             setattr(self, k, v)
 
-    def intercellflux(self, states, int dim=0):
+    def intercell_flux(self, states, int dim=0):
         cdef fluids_state **fluid = <fluids_state**>malloc(
             states.size * sizeof(fluids_state*))
         cdef int i
@@ -49,6 +49,31 @@ cdef class FishSolver(object):
         fish_intercellflux(self._c, fluid, <double*>Fiph.data, states.size, dim)
         free(fluid)
         return Fiph
+
+    def time_derivative(self, cons, states, spacing):
+        cdef fluids_state **fluid = <fluids_state**>malloc(
+            states.size * sizeof(fluids_state*))
+        cdef int i, N
+        cdef FluidState si
+        cdef int Q = states[0].descriptor.nprimitive
+        cdef int shape[3]
+        cdef double dx[3]
+
+        for i, N in enumerate(states.shape):
+            shape[i] = N
+            dx[i] = spacing[i]
+
+        for i in range(states.size):
+            si = states[i]
+            fluid[i] = si._c
+
+        cdef np.ndarray[np.double_t] U = cons.reshape(states.size*Q)
+        cdef np.ndarray[np.double_t] L = np.zeros(states.size*Q)
+
+        fish_timederivative(self._c, fluid, len(states.shape), shape, dx,
+                            <double*>U.data, <double*>L.data)
+        free(fluid)
+        return L.reshape([states.size, Q])
 
     property solver_type:
         def __get__(self):
