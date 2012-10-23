@@ -120,6 +120,13 @@ class MaraEvolutionOperator(object):
         self.fluid.primitive = P
         self.fluid.gravity = G
 
+    def set_boundary(self):
+        """
+        This function does not call BC's on gravitational field right now.
+        """
+        ng = self.number_guard_zones()
+        self.boundary.set_boundary(self.fluid.primitive, ng, field='prim')
+
     def advance(self, dt, rk=3):
         start = time.clock()
         U0 = self.fluid.conserved()
@@ -152,12 +159,10 @@ class MaraEvolutionOperator(object):
             # no driving module
             pass
 
+        ng = self.number_guard_zones()
+        self.boundary.set_boundary(U1, ng)
         self.fluid.from_conserved(U1)
-        self.boundary.set_boundary(self)
         return time.clock() - start
-
-    def set_boundary(self):
-        self.boundary.set_boundary(self)
 
     def update_gravity(self):
         """
@@ -199,29 +204,26 @@ class MaraEvolutionOperator(object):
         plt.show()
 
     def dUdt(self, U):
-        if (U[...,0] < 0.0).any():
-            raise RuntimeError("negative density (conserved)")
-        if (U[...,1] < 0.0).any():
-            raise RuntimeError("negative energy")
+        ng = self.number_guard_zones()
+        self.boundary.set_boundary(U, ng)
         self.fluid.from_conserved(U)
-        P = self.fluid.primitive
-        if (P[...,0] < 0.0).any():
-            raise RuntimeError("negative density (primitive)")
-        if (P[...,1] < 0.0).any():
-            #P[P[...,1] < self.pressure_floor, 1] = self.pressure_floor
-            #print "set pressure floor on some zones"
-            raise RuntimeError("negative pressure")
-        self.update_gravity()
-        self.set_boundary()
         L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
-        S = self.fluid.source_terms()
-        return L + S
+        #S = self.fluid.source_terms()
+        return L# + S
+
+    def dUdt_(self, U):
+        ng = self.number_guard_zones()
+        self.boundary.set_boundary(U, ng)
+        L = self.scheme.time_derivative(U, self.fluid.states,
+                                        [self.dx, self.dy, self.dz])
+        #S = self.fluid.source_terms()
+        return L# + S
 
     def _dUdt1d(self, fluid, scheme):
         Nx, = self.fluid.shape
         dx, = self.dx,
         L = np.zeros_like(fluid.primitive)
-        Fiph = scheme.intercellflux(fluid[:], dim=0)
+        Fiph = scheme.intercell_flux(fluid[:], dim=0)
         L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
         return L
 
@@ -230,10 +232,10 @@ class MaraEvolutionOperator(object):
         dx, dy = self.dx, self.dy
         L = np.zeros_like(fluid.primitive)
         for j in range(Ny):
-            Fiph = scheme.intercellflux(fluid[:,j], dim=0)
+            Fiph = scheme.intercell_flux(fluid[:,j], dim=0)
             L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
         for i in range(Nx):
-            Giph = scheme.intercellflux(fluid[i,:], dim=1)
+            Giph = scheme.intercell_flux(fluid[i,:], dim=1)
             L[i,1:] += -(Giph[1:] - Giph[:-1]) / dy
         return L
 
@@ -243,15 +245,15 @@ class MaraEvolutionOperator(object):
         L = np.zeros_like(fluid.primitive)
         for j in range(Ny):
             for k in range(Nz):
-                Fiph = scheme.intercellflux(fluid[:,j,k], dim=0)
+                Fiph = scheme.intercell_flux(fluid[:,j,k], dim=0)
                 L[1:,j,k] += -(Fiph[1:] - Fiph[:-1]) / dx
         for k in range(Nz):
             for i in range(Nx):
-                Giph = scheme.intercellflux(fluid[i,:,k], dim=1)
+                Giph = scheme.intercell_flux(fluid[i,:,k], dim=1)
                 L[i,1:,k] += -(Giph[1:] - Giph[:-1]) / dy
         for i in range(Nx):
             for j in range(Ny):
-                Hiph = scheme.intercellflux(fluid[i,j,:], dim=2)
+                Hiph = scheme.intercell_flux(fluid[i,j,:], dim=2)
                 L[i,j,1:] += -(Hiph[1:] - Hiph[:-1]) / dz
         return L
 
@@ -267,9 +269,9 @@ def main():
                        fluid='nrhyd', pauls_fix=True)
     #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
     problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
-                                              tfinal=0.05,
+                                              tfinal=0.2,
                                               geometry='cylindrical',
-                                              resolution=[64,64])
+                                              resolution=[32,32])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -292,8 +294,8 @@ def main():
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][1]
-    scheme.reconstruction = "weno5"
+    scheme.solver_type = ["godunov", "spectral"][0]
+    scheme.reconstruction = "plm"
     scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
     scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][2]
@@ -302,8 +304,8 @@ def main():
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
 
-    mara.update_gravity()
-    mara.set_boundary()
+    #mara.update_gravity()
+    #mara.set_boundary()
 
     if plot_interactive:
         import matplotlib.pyplot as plt
@@ -345,7 +347,7 @@ def main():
         measlog[status.iteration]["message"] = status.message
         print status.message
 
-    mara.boundary.set_boundary(mara)
+    mara.set_boundary()
     if plot_final:
         plot(mara, plot_fields, show=True, label='end')
 
