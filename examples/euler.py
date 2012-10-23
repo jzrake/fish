@@ -203,7 +203,7 @@ class MaraEvolutionOperator(object):
         plt.semilogy(abs(((gph1 - gph0))[ng:-ng]))
         plt.show()
 
-    def dUdt(self, U):
+    def dUdt_(self, U):
         ng = self.number_guard_zones()
         self.boundary.set_boundary(U, ng)
         self.fluid.from_conserved(U)
@@ -211,11 +211,11 @@ class MaraEvolutionOperator(object):
         #S = self.fluid.source_terms()
         return L# + S
 
-    def dUdt_(self, U):
+    def dUdt(self, U):
+        dx = [self.dx, self.dy, self.dz]
         ng = self.number_guard_zones()
         self.boundary.set_boundary(U, ng)
-        L = self.scheme.time_derivative(U, self.fluid.states,
-                                        [self.dx, self.dy, self.dz])
+        L = self.scheme.time_derivative(U, self.fluid, dx)
         #S = self.fluid.source_terms()
         return L# + S
 
@@ -271,7 +271,7 @@ def main():
     problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
                                               tfinal=0.2,
                                               geometry='cylindrical',
-                                              resolution=[32,32])
+                                              resolution=[64,64])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -294,7 +294,7 @@ def main():
     plot = [plot1d, plot2d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][0]
+    scheme.solver_type = ["godunov", "spectral"][1]
     scheme.reconstruction = "plm"
     scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
@@ -303,9 +303,6 @@ def main():
     mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
     mara.boundary = problem.build_boundary(mara)
-
-    #mara.update_gravity()
-    #mara.set_boundary()
 
     if plot_interactive:
         import matplotlib.pyplot as plt

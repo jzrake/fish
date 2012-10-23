@@ -50,12 +50,13 @@ cdef class FishSolver(object):
         free(fluid)
         return Fiph
 
-    def time_derivative(self, cons, states, spacing):
+    def time_derivative(self, cons, fluidstatevec, spacing):
+        states = fluidstatevec.states
         cdef fluids_state **fluid = <fluids_state**>malloc(
             states.size * sizeof(fluids_state*))
         cdef int i, N
         cdef FluidState si
-        cdef int Q = states[0].descriptor.nprimitive
+        cdef int Q = fluidstatevec.descriptor.nprimitive
         cdef int shape[3]
         cdef double dx[3]
 
@@ -64,7 +65,7 @@ cdef class FishSolver(object):
             dx[i] = spacing[i]
 
         for i in range(states.size):
-            si = states[i]
+            si = states.flat[i]
             fluid[i] = si._c
 
         cdef np.ndarray[np.double_t] U = cons.reshape(states.size*Q)
@@ -73,7 +74,7 @@ cdef class FishSolver(object):
         fish_timederivative(self._c, fluid, len(states.shape), shape, dx,
                             <double*>U.data, <double*>L.data)
         free(fluid)
-        return L.reshape([states.size, Q])
+        return L.reshape(states.shape + (Q,))
 
     property solver_type:
         def __get__(self):
