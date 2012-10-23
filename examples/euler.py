@@ -215,7 +215,8 @@ class MaraEvolutionOperator(object):
         dx = [self.dx, self.dy, self.dz]
         ng = self.number_guard_zones()
         self.boundary.set_boundary(U, ng)
-        L = self.scheme.time_derivative(U, self.fluid, dx)
+        self.fluid.from_conserved(U)
+        L = self.scheme.time_derivative(self.fluid, dx)
         #S = self.fluid.source_terms()
         return L# + S
 
@@ -271,7 +272,7 @@ def main():
     problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
                                               tfinal=0.2,
                                               geometry='spherical',
-                                              resolution=[16,16,16])
+                                              resolution=[256,256])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -294,7 +295,7 @@ def main():
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     scheme = pyfish.FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][1]
+    scheme.solver_type = ["godunov", "spectral"][0]
     scheme.reconstruction = "plm"
     scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
