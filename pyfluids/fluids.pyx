@@ -24,6 +24,24 @@ _coordsystem_i     = inverse_dict(_coordsystem)
 _equationofstate_i = inverse_dict(_equationofstate)
 _riemannsolver_i   = inverse_dict(_riemannsolver)
 
+class NegativeDensityCons(RuntimeError): pass
+class NegativeDensityPrim(RuntimeError): pass
+class NegativeEnergy(RuntimeError): pass
+class NegativePressure(RuntimeError): pass
+class SuperluminalVelocity(RuntimeError): pass
+class ConsToPrimMaxIteration(RuntimeError): pass
+
+_errors = {
+  FLUIDS_ERROR_RIEMANN: RuntimeError,
+  FLUIDS_ERROR_INCOMPLETE: RuntimeError,
+  FLUIDS_ERROR_NEGATIVE_DENSITY_CONS: NegativeDensityCons,
+  FLUIDS_ERROR_NEGATIVE_DENSITY_PRIM: NegativeDensityPrim,
+  FLUIDS_ERROR_NEGATIVE_ENERGY: NegativeEnergy,
+  FLUIDS_ERROR_NEGATIVE_PRESSURE: NegativePressure,
+  FLUIDS_ERROR_SUPERLUMINAL: SuperluminalVelocity,
+  FLUIDS_ERROR_C2P_MAXITER: ConsToPrimMaxIteration,
+  FLUIDS_ERROR_NOT_IMPLEMENTED: NotImplementedError,
+}
 
 cdef class FluidDescriptor(object):
     """
@@ -189,51 +207,62 @@ cdef class FluidState(object):
 
     def from_conserved(self, np.ndarray[np.double_t,ndim=1] x):
         if x.size != self._np: raise ValueError("wrong size input array")
-        cdef int e = fluids_state_fromcons(self._c, <double*>x.data,
-                                           FLUIDS_CACHE_DEFAULT)
-        if e:
-            raise RuntimeError("conserved to primitive failed")
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_fromcons(self._c, y, FLUIDS_CACHE_DEFAULT)
+        if err != 0: raise _errors[err]("%s" % x)
 
     def conserved(self):
         cdef np.ndarray[np.double_t,ndim=1] x = np.zeros(self._np)
-        fluids_state_derive(self._c, <double*>x.data, FLUIDS_CONSERVED)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, FLUIDS_CONSERVED)
+        if err != 0: raise _errors[err]()
         return x
 
     def flux(self, dim=0):
         cdef int flag = [FLUIDS_FLUX0, FLUIDS_FLUX1, FLUIDS_FLUX2][dim]
         cdef np.ndarray[np.double_t,ndim=1] x = np.zeros(self._np)
-        fluids_state_derive(self._c, <double*>x.data, flag)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, flag)
+        if err != 0: raise _errors[err]()
         return x
 
     def source_terms(self):
         cdef np.ndarray[np.double_t,ndim=1] x = np.zeros(self._np)
-        fluids_state_derive(self._c, <double*>x.data, FLUIDS_SOURCETERMS)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, FLUIDS_SOURCETERMS)
+        if err != 0: raise _errors[err]()
         return x
 
     def eigenvalues(self, dim=0):
         cdef int flag = [FLUIDS_EVAL0, FLUIDS_EVAL1, FLUIDS_EVAL2][dim]
         cdef np.ndarray[np.double_t,ndim=1] x = np.zeros(self._np)
-        fluids_state_derive(self._c, <double*>x.data, flag)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, flag)
+        if err != 0: raise _errors[err]()
         return x
 
     def left_eigenvectors(self, dim=0):
         cdef int flag = [FLUIDS_LEVECS0, FLUIDS_LEVECS1, FLUIDS_LEVECS2][dim]
         cdef np.ndarray[np.double_t,ndim=2] x = np.zeros([self._np]*2)
-        fluids_state_derive(self._c, <double*>x.data, flag)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, flag)
+        if err != 0: raise _errors[err]()
         return x
 
     def right_eigenvectors(self, dim=0):
         cdef int flag = [FLUIDS_REVECS0, FLUIDS_REVECS1, FLUIDS_REVECS2][dim]
         cdef np.ndarray[np.double_t,ndim=2] x = np.zeros([self._np]*2)
-        fluids_state_derive(self._c, <double*>x.data, flag)
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, flag)
+        if err != 0: raise _errors[err]()
         return x
 
     def jacobian(self, dim=0):
         cdef int flag = [FLUIDS_JACOBIAN0, FLUIDS_JACOBIAN1, FLUIDS_JACOBIAN2][dim]
         cdef np.ndarray[np.double_t,ndim=2] x = np.zeros([self._np]*2)
-        cdef int err = fluids_state_derive(self._c, <double*>x.data, flag)
-        if err == FLUIDS_ERROR_NOT_IMPLEMENTED:
-            raise NotImplementedError()
+        cdef double *y = <double*>x.data
+        cdef int err = fluids_state_derive(self._c, y, flag)
+        if err != 0: raise _errors[err]()
         return x
 
     def sound_speed(self):
@@ -247,6 +276,7 @@ cdef class FluidStateVector(FluidState):
         super(FluidStateVector, self).__init__(*args, **kwargs)
         shape = tuple(shape)
         self._states = np.ndarray(shape=shape, dtype=FluidState)
+        self._failmask = np.zeros(shape, dtype=np.int8)
 
         self._primitive = np.zeros(shape + (self._np,))
         self._passive = np.zeros(shape + (self._ns,))
@@ -286,15 +316,21 @@ cdef class FluidStateVector(FluidState):
     property states:
         def __get__(self):
             return self._states
+    property failmask:
+        def __get__(self):
+            return self._failmask
+        def __set__(self, val):
+            self._failmask[...] = val
 
     cdef _derive(self, long flag, int size):
         cdef tuple shape = self.states.shape + ((size,) if size > 1 else tuple())
         cdef np.ndarray ret = np.zeros(shape)
-        cdef int n
+        cdef int n, e
         cdef FluidState S
         for n in range(self.states.size):
             S = self.states.flat[n]
-            fluids_state_derive(S._c, <double*>ret.data + n*size, flag)
+            e = fluids_state_derive(S._c, <double*>ret.data + n*size, flag)
+            if e != 0: self._failmask.flat[n] = e
         return ret
 
     def __getitem__(self, args):
@@ -310,10 +346,7 @@ cdef class FluidStateVector(FluidState):
             S = self.states.flat[n]
             e = fluids_state_fromcons(S._c, <double*>x.data + n*self._np,
                                       FLUIDS_CACHE_DEFAULT)
-            if e:
-                raise RuntimeError(
-                    "conserved to primitive failed on zone %d: U=%s" % (
-                        n, x[n:n+self._np]))
+            if e != 0: self._failmask.flat[n] = e
 
     def conserved(self):
         return self._derive(FLUIDS_CONSERVED, self._np)

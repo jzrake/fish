@@ -153,6 +153,7 @@ cdef class FluidState(object):
 
 cdef class FluidStateVector(FluidState):
     cdef _derive(self, long flag, int sz)
+    cdef np.ndarray _failmask
 
 
 cdef class RiemannSolver(object):
