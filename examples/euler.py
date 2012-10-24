@@ -187,6 +187,8 @@ class MaraEvolutionOperator(object):
                                                   retrhobar=True)
             self.fluid.descriptor.rhobar = rhobar
             self.fluid.gravity[ng:-ng] = G
+            self.boundary.set_boundary(self.fluid.gravity, ng, field='grav')
+
         except AttributeError: # no poisson_solver
             pass
         except ValueError: # no gravity array
@@ -203,60 +205,18 @@ class MaraEvolutionOperator(object):
         plt.semilogy(abs(((gph1 - gph0))[ng:-ng]))
         plt.show()
 
-    def dUdt_(self, U):
-        ng = self.number_guard_zones()
-        self.boundary.set_boundary(U, ng)
-        self.fluid.from_conserved(U)
-        L = getattr(self, "_dUdt%dd" % len(self.shape))(self.fluid, self.scheme)
-        #S = self.fluid.source_terms()
-        return L# + S
-
     def dUdt(self, U):
-        dx = [self.dx, self.dy, self.dz]
         ng = self.number_guard_zones()
+        dx = [self.dx, self.dy, self.dz]
         self.boundary.set_boundary(U, ng)
         self.fluid.from_conserved(U)
+        self.update_gravity()
         L = self.scheme.time_derivative(self.fluid, dx)
-        #S = self.fluid.source_terms()
-        return L# + S
-
-    def _dUdt1d(self, fluid, scheme):
-        Nx, = self.fluid.shape
-        dx, = self.dx,
-        L = np.zeros_like(fluid.primitive)
-        Fiph = scheme.intercell_flux(fluid[:], dim=0)
-        L[1:] += -(Fiph[1:] - Fiph[:-1]) / dx
-        return L
-
-    def _dUdt2d(self, fluid, scheme):
-        Nx, Ny = self.fluid.shape
-        dx, dy = self.dx, self.dy
-        L = np.zeros_like(fluid.primitive)
-        for j in range(Ny):
-            Fiph = scheme.intercell_flux(fluid[:,j], dim=0)
-            L[1:,j] += -(Fiph[1:] - Fiph[:-1]) / dx
-        for i in range(Nx):
-            Giph = scheme.intercell_flux(fluid[i,:], dim=1)
-            L[i,1:] += -(Giph[1:] - Giph[:-1]) / dy
-        return L
-
-    def _dUdt3d(self, fluid, scheme):
-        Nx, Ny, Nz = self.fluid.shape
-        dx, dy, dz = self.dx, self.dy, self.dz
-        L = np.zeros_like(fluid.primitive)
-        for j in range(Ny):
-            for k in range(Nz):
-                Fiph = scheme.intercell_flux(fluid[:,j,k], dim=0)
-                L[1:,j,k] += -(Fiph[1:] - Fiph[:-1]) / dx
-        for k in range(Nz):
-            for i in range(Nx):
-                Giph = scheme.intercell_flux(fluid[i,:,k], dim=1)
-                L[i,1:,k] += -(Giph[1:] - Giph[:-1]) / dy
-        for i in range(Nx):
-            for j in range(Ny):
-                Hiph = scheme.intercell_flux(fluid[i,j,:], dim=2)
-                L[i,j,1:] += -(Hiph[1:] - Hiph[:-1]) / dz
-        return L
+        if self.fluid.descriptor.fluid in ['gravp', 'gravs']:
+            S = self.fluid.source_terms()
+            return L + S
+        else:
+            return L
 
 
 class SimulationStatus:
@@ -266,13 +226,13 @@ class SimulationStatus:
 def main():
     # Problem options
     problem_cfg = dict(resolution=[128],
-                       tfinal=0.1,
-                       fluid='nrhyd', pauls_fix=True)
-    #problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
-                                              tfinal=0.2,
-                                              geometry='spherical',
-                                              resolution=[256,256])
+                       tfinal=1.0,
+                       fluid='gravs', pauls_fix=False)
+    problem = pyfish.problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
+    #problem = pyfish.problems.BrioWuShocktube(fluid='nrhyd',
+    #                                          tfinal=0.2,
+    #                                          geometry='planar', direction='x',
+    #                                          resolution=[128])
     #problem = pyfish.problems.PeriodicDensityWave(**problem_cfg)
     #problem = pyfish.problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -290,7 +250,7 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = False
+    plot_initial = True
     plot_final = True
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 

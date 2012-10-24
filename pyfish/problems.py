@@ -79,17 +79,6 @@ class OneDimensionalPolytrope(TestProblem):
         if self.selfgrav:
             self.poisson_solver = gravity.PoissonSolver1d()
 
-    def ginit(self, x, y, z):
-        R = self.R
-        s = (2 * self.Dc * R) / np.pi # enclosed mass per unit area
-        if abs(x) < R/2:
-            phi = -(self.Dc / (np.pi/R)**2) * np.cos(np.pi*x/R) * self.four_pi_G
-            gph = +(self.Dc / (np.pi/R)**1) * np.sin(np.pi*x/R) * self.four_pi_G
-        else:
-            phi = abs(x) * self.four_pi_G * s
-            gph = self.four_pi_G * s * np.sign(x)
-        return [phi, gph, 0.0, 0.0]
-
     def pinit(self, x, y, z):
         R = self.R
         K = 0.5 * R**2 / np.pi**2
@@ -107,6 +96,9 @@ class OneDimensionalPolytrope(TestProblem):
             if rho < self.Da: rho = self.Da
             if pre < self.Pa: pre = self.Pa
         return [rho, pre, 0.0, 0.0, 0.0]
+
+    def ginit(self, x, y, z):
+        return [0.0, 0.0, 0.0, 0.0]
 
     def build_boundary(self, mara):
         return boundary.Periodic()
@@ -222,3 +214,18 @@ def central_mass3d(x, y, z):
     pre = 1.0
     return [rho, pre, 0.0, 0.0, 0.0]
 
+
+def ginit(self, x, y, z):
+    """
+    An attempt at a static gravity solution to the 1d polytrop. In practive we
+    just use the FFT.
+    """
+    R = self.R
+    s = (2 * self.Dc * R) / np.pi # enclosed mass per unit area
+    if abs(x) < R/2:
+        phi = -(self.Dc / (np.pi/R)**2) * np.cos(np.pi*x/R) * self.four_pi_G
+        gph = +(self.Dc / (np.pi/R)**1) * np.sin(np.pi*x/R) * self.four_pi_G
+    else:
+        phi = abs(x) * self.four_pi_G * s
+        gph = self.four_pi_G * s * np.sign(x)
+    return [phi, gph, 0.0, 0.0]
