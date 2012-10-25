@@ -72,7 +72,8 @@ class OneDimensionalPolytrope(TestProblem):
     R = 0.25
     four_pi_G = 1.0
     plot_fields = ['rho', 'pre', 'phi', 'gph']
-    pauls_fix = True
+    pauls_fix = False
+    gaussian = False
 
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
@@ -82,7 +83,10 @@ class OneDimensionalPolytrope(TestProblem):
     def pinit(self, x, y, z):
         R = self.R
         K = 0.5 * R**2 / np.pi**2
-        if abs(x) < R/2:
+        if self.gaussian:
+            rho = self.Dc * np.exp(-x*x/0.01) + self.Da
+            pre = K * rho**1.0
+        elif abs(x) < R/2:
             rho = self.Dc * np.cos(np.pi * x / R)
             pre = K * rho**2.0
         else:

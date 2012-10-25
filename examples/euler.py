@@ -12,39 +12,39 @@ class SimulationStatus:
 def main():
     # Problem options
     problem_cfg = dict(resolution=[128],
-                       tfinal=0.25, v0=0.1,
-                       fluid='nrhyd', pauls_fix=False)
-    #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = problems.BrioWuShocktube(fluid='nrhyd',
-                                       tfinal=0.2,
-                                       geometry='planar', direction='x',
-                                       resolution=[128])
+                       tfinal=2.8, v0=0.0, gamma=1.001,
+                       fluid='gravp', pauls_fix=False, gaussian=True)
+    problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
+    #problem = problems.BrioWuShocktube(fluid='nrhyd',
+    #                                   tfinal=0.2,
+    #                                   geometry='planar', direction='x',
+    #                                   resolution=[128])
     #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
 
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.8
+    status.CFL = 0.6
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
     status.chkpt_number = 0
     status.chkpt_last = 0.0
-    status.chkpt_interval = 0.25
+    status.chkpt_interval = 2.0
     measlog = { }
 
     # Scheme setup
     scheme = FishSolver()
     scheme.solver_type = ["godunov", "spectral"][0]
     scheme.reconstruction = "plm"
-    scheme.riemann_solver = "hllc"
+    scheme.riemann_solver = "hll"
     scheme.shenzha10_param = 100.0
     scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][2]
 
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = False
+    plot_initial = True
     plot_final = True
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
