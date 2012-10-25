@@ -20,6 +20,7 @@ class MaraEvolutionOperator(object):
         self.driving = getattr(problem, 'driving', None)
         self.poisson_solver = getattr(problem, 'poisson_solver', None)
         self.pressure_floor = 1e-6
+        self.safe_c2p = True
 
         Nx, Ny, Nz = self.fluid.shape + (1,) * (3 - len(self.shape))
 
@@ -155,7 +156,7 @@ class MaraEvolutionOperator(object):
 
         ng = self.number_guard_zones()
         self.boundary.set_boundary(U1, ng)
-        self.fluid.from_conserved(U1)
+        self.from_conserved(U1)
         return time.clock() - start
 
     def update_gravity(self):
@@ -188,6 +189,19 @@ class MaraEvolutionOperator(object):
         except ValueError: # no gravity array
             pass
 
+    def from_conserved(self, U):
+        """
+        A safe version of the fluid's from_conserved method.
+        """
+        if not self.safe_c2p:
+            self.fluid.from_conserved(U)
+            return
+        self.fluid.failmask = 0
+        self.fluid.from_conserved(U)
+        if self.fluid.failmask.any():
+            raise RuntimeError("cons to prim failed on %d zones" % sum(
+                    self.fluid.failmask != 0))
+
     def validate_gravity(self):
         if len(self.shape) > 1:
             raise NotImplementedError
@@ -203,7 +217,7 @@ class MaraEvolutionOperator(object):
         ng = self.number_guard_zones()
         dx = [self.dx, self.dy, self.dz]
         self.boundary.set_boundary(U, ng)
-        self.fluid.from_conserved(U)
+        self.from_conserved(U)
         self.update_gravity()
         L = self.scheme.time_derivative(self.fluid, dx)
         if self.fluid.descriptor.fluid in ['gravp', 'gravs']:

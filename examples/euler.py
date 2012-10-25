@@ -1,4 +1,5 @@
 
+import time
 from pyfish import FishSolver
 from pyfish import problems
 from pyfish.simulation import MaraEvolutionOperator
@@ -12,13 +13,13 @@ class SimulationStatus:
 def main():
     # Problem options
     problem_cfg = dict(resolution=[128],
-                       tfinal=2.8, v0=0.0, gamma=1.001,
+                       tfinal=2.8, v0=0.0, gamma=1.01,
                        fluid='gravp', pauls_fix=False, gaussian=True)
-    problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    #problem = problems.BrioWuShocktube(fluid='nrhyd',
-    #                                   tfinal=0.2,
-    #                                   geometry='planar', direction='x',
-    #                                   resolution=[128])
+    #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
+    problem = problems.BrioWuShocktube(fluid='nrhyd',
+                                       tfinal=0.2,
+                                       geometry='planar', direction='x',
+                                       resolution=[128])
     #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
 
@@ -31,6 +32,8 @@ def main():
     status.chkpt_number = 0
     status.chkpt_last = 0.0
     status.chkpt_interval = 2.0
+    status.clock_start = time.clock()
+    status.accum_wall = 0.0
     measlog = { }
 
     # Scheme setup
@@ -44,8 +47,8 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = True
-    plot_final = True
+    plot_initial = False
+    plot_final = False
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     # Runtime options
@@ -57,6 +60,7 @@ def main():
     else:
         mara = MaraEvolutionOperator(problem, scheme)
 
+    mara.safe_c2p = True
     mara.initial_model(problem.pinit, problem.ginit)
 
     if plot_interactive:
@@ -83,6 +87,7 @@ def main():
         status.time_step = dt
         status.time_current += status.time_step
         status.iteration += 1
+        status.accum_wall += wall_step
 
         status.message = "%05d(%d): t=%5.4f dt=%5.4e %5.1fkz/s %3.2fus/(z*Nq)" % (
             status.iteration, 0, status.time_current, dt,
@@ -98,6 +103,15 @@ def main():
         measlog[status.iteration]["time"] = status.time_current
         measlog[status.iteration]["message"] = status.message
         print status.message
+
+    print "\n"
+    print "performance report:"
+    print "-------------------"
+    print "wall time in integrations : %3.2fs" % status.accum_wall
+    print "wall time total           : %3.2fs" % (time.clock() - status.clock_start)
+    print "mean kz/s per iteration   : %5.1fkz/s" % (
+        1e-3 * mara.fluid.size / status.accum_wall * status.iteration)
+    print "\n"
 
     mara.set_boundary()
     if plot_final and not parallel:
