@@ -211,3 +211,7 @@ class MaraEvolutionOperator(object):
             return L + S
         else:
             return L
+
+    def timestep(self, CFL):
+        ml = abs(self.fluid.eigenvalues()).max()
+        return CFL * self.min_grid_spacing() / ml

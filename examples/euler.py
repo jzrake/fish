@@ -64,17 +64,16 @@ def main():
         plt.ion()
         lines = plot(mara, plot_fields, show=False)
 
-    if plot_initial:
+    if plot_initial and not parallel:
         plot(mara, plot_fields, show=False, label='start')
 
     while status.time_current < problem.tfinal:
-        if plot_interactive:
+        if plot_interactive and not parallel:
             for f in plot_fields:
                 lines[f].set_ydata(mara.fields[f])
             plt.draw()
 
-        ml = abs(mara.fluid.eigenvalues()).max()
-        dt = status.CFL * mara.min_grid_spacing() / ml
+        dt = mara.timestep(status.CFL)
         try:
             wall_step = mara.advance(dt, rk=3)
         except RuntimeError as e:
@@ -101,7 +100,7 @@ def main():
         print status.message
 
     mara.set_boundary()
-    if plot_final:
+    if plot_final and not parallel:
         plot(mara, plot_fields, show=True, label='end')
 
 

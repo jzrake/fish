@@ -63,3 +63,7 @@ class ParallelSimulation(MaraEvolutionOperator):
         chkpt_name = "%s/chkpt.%04d.h5" % (dir, status.chkpt_number)
         print "Writing checkpoint", chkpt_name
         field.dump(chkpt_name)
+
+    def timestep(self, CFL):
+        ml = self.domain.reduce(abs(self.fluid.eigenvalues()).max(), op='max')
+        return CFL * self.min_grid_spacing() / ml
