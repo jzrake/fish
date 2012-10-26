@@ -147,34 +147,54 @@ cdef class FluidState(object):
         cdef int size
         cdef double *x
         if key == 'primitive':
+            if buf.shape != (self._np,) or buf.dtype != np.double:
+                raise ValueError("wrong size or type buffer")
             self._primitive = buf
             x = <double*>self._primitive.data
             size = self._np
             flag = FLUIDS_PRIMITIVE
-        if key == 'passive':
+            fluids_state_mapbuffer(self._c, x, flag)
+        elif key == 'passive':
+            if buf.shape != (self._ns,) or buf.dtype != np.double:
+                raise ValueError("wrong size or type buffer")
             self._passive = buf
             x = <double*>self._passive.data
             size = self._ns
             flag = FLUIDS_PASSIVE
-        if key == 'gravity':
+            fluids_state_mapbuffer(self._c, x, flag)
+        elif key == 'gravity':
+            if buf.shape != (self._ng,) or buf.dtype != np.double:
+                raise ValueError("wrong size or type buffer")
             self._gravity = buf
             x = <double*>self._gravity.data
             size = self._ng
             flag = FLUIDS_GRAVITY
-        if key == 'magnetic':
+            fluids_state_mapbuffer(self._c, x, flag)
+        elif key == 'magnetic':
+            if buf.shape != (self._nm,) or buf.dtype != np.double:
+                raise ValueError("wrong size or type buffer")
             self._magnetic = buf
             x = <double*>self._magnetic.data
             size = self._nm
             flag = FLUIDS_MAGNETIC
-        if key == 'location':
+            fluids_state_mapbuffer(self._c, x, flag)
+        elif key == 'location':
+            if buf.shape != (self._nl,) or buf.dtype != np.double:
+                raise ValueError("wrong size or type buffer")
             self._location = buf
             x = <double*>self._location.data
             size = self._nl
             flag = FLUIDS_LOCATION
-        if buf.shape != (size,) or buf.dtype != np.float64:
-            raise ValueError("wrong size or type buffer")
+            fluids_state_mapbuffer(self._c, x, flag)
+        elif key == 'userflag':
+            if buf.shape != (1,) or buf.dtype != np.int:
+                raise ValueError("wrong size or type buffer")
+            self._userflag = buf
+            flag = FLUIDS_USERFLAG
+            fluids_state_mapbufferuserflag(self._c, <int*>self._userflag.data)
+        else:
+            raise ValueError("bad buffer flag: " + key)
 
-        fluids_state_mapbuffer(self._c, x, flag)
 
     property descriptor:
         def __get__(self):
@@ -204,6 +224,11 @@ cdef class FluidState(object):
             return self._location
         def __set__(self, val):
             self._location[...] = val
+    property userflag:
+        def __get__(self):
+            return self._userflag
+        def __set__(self, val):
+            self._userflag[...] = val
 
     def from_conserved(self, np.ndarray[np.double_t,ndim=1] x):
         if x.size != self._np: raise ValueError("wrong size input array")
@@ -276,13 +301,13 @@ cdef class FluidStateVector(FluidState):
         super(FluidStateVector, self).__init__(*args, **kwargs)
         shape = tuple(shape)
         self._states = np.ndarray(shape=shape, dtype=FluidState)
-        self._failmask = np.zeros(shape, dtype=np.int8)
 
         self._primitive = np.zeros(shape + (self._np,))
         self._passive = np.zeros(shape + (self._ns,))
         self._gravity = np.zeros(shape + (self._ng,))
         self._magnetic = np.zeros(shape + (self._nm,))
         self._location = np.zeros(shape + (self._nl,))
+        self._userflag = np.zeros(shape + (1,), dtype=np.int)
 
         cdef FluidState state
         cdef int n
@@ -291,6 +316,7 @@ cdef class FluidStateVector(FluidState):
         cdef np.ndarray G = self.gravity.reshape([self.states.size, self._ng])
         cdef np.ndarray M = self.magnetic.reshape([self.states.size, self._nm])
         cdef np.ndarray L = self.location.reshape([self.states.size, self._nl])
+        cdef np.ndarray F = self.userflag.reshape([self.states.size, 1])
 
         for arr in [P, S, G, M, L]:
             assert not arr.flags['OWNDATA']
@@ -302,6 +328,7 @@ cdef class FluidStateVector(FluidState):
             if self._ng: state.map_buffer('gravity', G[n])
             if self._nm: state.map_buffer('magnetic', M[n])
             if self._nl: state.map_buffer('location', L[n])
+            state.map_buffer('userflag', F[n])
             self._states.flat[n] = state
 
     property shape:
@@ -316,11 +343,6 @@ cdef class FluidStateVector(FluidState):
     property states:
         def __get__(self):
             return self._states
-    property failmask:
-        def __get__(self):
-            return self._failmask
-        def __set__(self, val):
-            self._failmask[...] = val
 
     cdef _derive(self, long flag, int size):
         cdef tuple shape = self.states.shape + ((size,) if size > 1 else tuple())
@@ -330,7 +352,7 @@ cdef class FluidStateVector(FluidState):
         for n in range(self.states.size):
             S = self.states.flat[n]
             e = fluids_state_derive(S._c, <double*>ret.data + n*size, flag)
-            if e != 0: self._failmask.flat[n] = e
+            if e != 0: self._userflag.flat[n] = e
         return ret
 
     def __getitem__(self, args):
@@ -346,7 +368,7 @@ cdef class FluidStateVector(FluidState):
             S = self.states.flat[n]
             e = fluids_state_fromcons(S._c, <double*>x.data + n*self._np,
                                       FLUIDS_CACHE_DEFAULT)
-            if e != 0: self._failmask.flat[n] = e
+            if e != 0: self._userflag.flat[n] = e
 
     def conserved(self):
         return self._derive(FLUIDS_CONSERVED, self._np)

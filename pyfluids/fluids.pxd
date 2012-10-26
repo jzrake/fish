@@ -8,28 +8,29 @@ cdef extern from "fluids.h":
         FLUIDS_GRAVITY           =  1<<3,
         FLUIDS_MAGNETIC          =  1<<4,
         FLUIDS_LOCATION          =  1<<5,
-        FLUIDS_CONSERVED         =  1<<6,
-        FLUIDS_SOURCETERMS       =  1<<7,
-        FLUIDS_FOURVELOCITY      =  1<<8,
-        FLUIDS_FLUX0             =  1<<9,
-        FLUIDS_FLUX1             =  1<<10,
-        FLUIDS_FLUX2             =  1<<11,
-        FLUIDS_EVAL0             =  1<<12,
-        FLUIDS_EVAL1             =  1<<13,
-        FLUIDS_EVAL2             =  1<<14,
-        FLUIDS_LEVECS0           =  1<<15,
-        FLUIDS_LEVECS1           =  1<<16,
-        FLUIDS_LEVECS2           =  1<<17,
-        FLUIDS_REVECS0           =  1<<18,
-        FLUIDS_REVECS1           =  1<<19,
-        FLUIDS_REVECS2           =  1<<20,
-        FLUIDS_JACOBIAN0         =  1<<21,
-        FLUIDS_JACOBIAN1         =  1<<22,
-        FLUIDS_JACOBIAN2         =  1<<23,
-        FLUIDS_SOUNDSPEEDSQUARED =  1<<24,
-        FLUIDS_TEMPERATURE       =  1<<25,
-        FLUIDS_SPECIFICENTHALPY  =  1<<26,
-        FLUIDS_SPECIFICINTERNAL  =  1<<27,
+        FLUIDS_USERFLAG          =  1<<6,
+        FLUIDS_CONSERVED         =  1<<7,
+        FLUIDS_SOURCETERMS       =  1<<8,
+        FLUIDS_FOURVELOCITY      =  1<<9,
+        FLUIDS_FLUX0             =  1<<10,
+        FLUIDS_FLUX1             =  1<<11,
+        FLUIDS_FLUX2             =  1<<12,
+        FLUIDS_EVAL0             =  1<<13,
+        FLUIDS_EVAL1             =  1<<14,
+        FLUIDS_EVAL2             =  1<<15,
+        FLUIDS_LEVECS0           =  1<<16,
+        FLUIDS_LEVECS1           =  1<<17,
+        FLUIDS_LEVECS2           =  1<<18,
+        FLUIDS_REVECS0           =  1<<19,
+        FLUIDS_REVECS1           =  1<<20,
+        FLUIDS_REVECS2           =  1<<21,
+        FLUIDS_JACOBIAN0         =  1<<22,
+        FLUIDS_JACOBIAN1         =  1<<23,
+        FLUIDS_JACOBIAN2         =  1<<24,
+        FLUIDS_SOUNDSPEEDSQUARED =  1<<25,
+        FLUIDS_TEMPERATURE       =  1<<26,
+        FLUIDS_SPECIFICENTHALPY  =  1<<27,
+        FLUIDS_SPECIFICINTERNAL  =  1<<28,
         FLUIDS_FLAGSALL          = (1<<30) - 1,
         FLUIDS_FLUXALL     = FLUIDS_FLUX0|FLUIDS_FLUX1|FLUIDS_FLUX2,
         FLUIDS_EVALSALL    = FLUIDS_EVAL0|FLUIDS_EVAL1|FLUIDS_EVAL2,
@@ -116,6 +117,9 @@ cdef extern from "fluids.h":
     int fluids_state_derive(fluids_state *S, double *x, long flag)
     int fluids_state_getcached(fluids_state *S, double *x, long flag)
     int fluids_state_mapbuffer(fluids_state *S, double *buffer, long flag)
+    int fluids_state_mapbufferuserflag(fluids_state *S, int *buffer)
+    int fluids_state_getuserflag(fluids_state *S, int *x)
+    int fluids_state_setuserflag(fluids_state *S, int *x)
     int fluids_state_cache(fluids_state *S, int operation)
 
 
@@ -149,11 +153,11 @@ cdef class FluidState(object):
     cdef np.ndarray _gravity
     cdef np.ndarray _magnetic
     cdef np.ndarray _location
+    cdef np.ndarray _userflag
 
 
 cdef class FluidStateVector(FluidState):
     cdef _derive(self, long flag, int sz)
-    cdef np.ndarray _failmask
 
 
 cdef class RiemannSolver(object):
