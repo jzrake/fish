@@ -119,6 +119,7 @@ class PeriodicDensityWave(TestProblem):
     D1 = 1.00 # density fluctuation
     v0 = 0.00 # velocity of the wave
     n0 = 4 # integer valued wave-number
+    khat = [1, 0, 0] # unit vector of plane-wave direction (integers please)
     plot_fields = ['rho', 'vx']
 
     def __init__(self, *args, **kwargs):
@@ -127,11 +128,14 @@ class PeriodicDensityWave(TestProblem):
             self.plot_fields.append('phi')
             self.poisson_solver = gravity.PoissonSolver1d()
             self.fluid_descriptor.rhobar = self.D0
+        k = np.dot(self.khat, self.khat)**0.5
 
     def pinit(self, x, y, z):
         L = self.upper_bounds[0] - self.lower_bounds[0]
-        rho = self.D0 + self.D1 * np.cos(2 * self.n0 * np.pi * x / L)
-        return [rho, self.p0, self.v0, 0.0, 0.0]
+        r = np.dot(self.khat, [x, y, z])
+        rho = self.D0 + self.D1 * np.cos(2 * self.n0 * np.pi * r / L)
+        v = [self.v0 * k for k in self.khat]
+        return [rho, self.p0] + v
 
     def ginit(self, x, y, z):
         return [0.0, 0.0, 0.0, 0.0]
@@ -179,6 +183,22 @@ class DrivenTurbulence2d(TestProblem):
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
         self.driving = driving.DrivingModule2d(self.resolution)
+
+    def pinit(self, x, y, z):
+        return [1.0, 1.0, 0.0, 0.0, 0.0]
+
+    def build_boundary(self, mara):
+        return boundary.Periodic()
+
+
+class DrivenTurbulence3d(TestProblem):
+    fluid = 'nrhyd'
+    gamma = 1.4
+    tfinal = 1.0
+    resolution = [16, 16, 16]
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        self.driving = driving.DrivingModule3d()
 
     def pinit(self, x, y, z):
         return [1.0, 1.0, 0.0, 0.0, 0.0]

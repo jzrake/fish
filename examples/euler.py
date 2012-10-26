@@ -12,20 +12,21 @@ class SimulationStatus:
 
 def main():
     # Problem options
-    problem_cfg = dict(resolution=[128],
-                       tfinal=2.8, v0=0.0, gamma=1.01,
-                       fluid='gravp', pauls_fix=False, gaussian=True)
+    problem_cfg = dict(resolution=[64,64], khat=[1, 2, 0], n0=1,
+                       tfinal=0.2, v0=0.1, gamma=1.4,
+                       fluid='nrhyd', pauls_fix=False, gaussian=True)
     #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = problems.BrioWuShocktube(fluid='nrhyd',
-                                       tfinal=0.2,
-                                       geometry='planar', direction='x',
-                                       resolution=[128])
+    #problem = problems.BrioWuShocktube(fluid='nrhyd',
+    #                                   tfinal=0.2,
+    #                                   geometry='planar', direction='x',
+    #                                   resolution=[128])
     #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
+    problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
 
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.6
+    status.CFL = 0.3
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
@@ -38,9 +39,9 @@ def main():
 
     # Scheme setup
     scheme = FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][0]
+    scheme.solver_type = ["godunov", "spectral"][1]
     scheme.reconstruction = "plm"
-    scheme.riemann_solver = "hll"
+    scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
     scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][2]
 
@@ -48,7 +49,7 @@ def main():
     plot_fields = problem.plot_fields
     plot_interactive = False
     plot_initial = False
-    plot_final = False
+    plot_final = True
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     # Runtime options
@@ -107,10 +108,10 @@ def main():
     print "\n"
     print "performance report:"
     print "-------------------"
-    print "wall time in integrations : %3.2fs" % status.accum_wall
-    print "wall time total           : %3.2fs" % (time.clock() - status.clock_start)
-    print "mean kz/s per iteration   : %5.1fkz/s" % (
-        1e-3 * mara.fluid.size / status.accum_wall * status.iteration)
+    print "wall time in integrations : %3.2f s" % status.accum_wall
+    print "wall time total           : %3.2f s" % (time.clock() - status.clock_start)
+    print "mean kz/s per iteration   : %3.2f kz/s" % (
+        1e-3 * mara.fluid.size / (status.accum_wall+1e-14) * status.iteration)
     print "\n"
 
     mara.set_boundary()

@@ -3,6 +3,36 @@ import numpy as np
 from numpy.fft import *
 
 
+class DrivingModule3d(object):
+    """
+    Utilizes the gaussfield C++ Python extension to create serializable Gauss
+    random fields:
+
+    https://github.com/jzrake/gaussfield
+    """
+    def __init__(self):
+        import gaussfield
+        self._field = gaussfield.GaussianField3d(1.0, 1.0, 3, 12345)
+        self._calls = 0
+
+    def advance(self, dt):
+        self._field.advance(dt)
+
+    def sample(self, X, Y, Z):
+        return self._field.sample(X, Y, Z)
+
+    def drive(self, mara, dt):
+        """
+        Modifies the primitives according to the acceleration field F.
+        """
+        self._calls += 1
+        if self._calls % 10 == 0 or not hasattr(self, '_F'):
+            X, Y, Z = mara.coordinate_grid()
+            start = time.clock()
+            self._F = self.sample(X, Y, Z)
+        mara.fluid.primitive[...,2:5] += self._F * dt
+
+
 class DrivingModule2d(object):
     """
     The power spectrum in this module refers to the 2d profile dP/dk^2, not the 1d

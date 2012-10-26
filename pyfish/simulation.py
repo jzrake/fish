@@ -142,21 +142,23 @@ class MaraEvolutionOperator(object):
             L4 = self.dUdt(U0 + (1.0*dt) * L3)
             U1 = U0 + dt * (L1 + 2.0*L2 + 2.0*L3 + L4) / 6.0
 
+        ng = self.number_guard_zones()
+        self.boundary.set_boundary(U1, ng)
+        self.from_conserved(U1)
+
         try:
-            """
-            Works only in 2d right now.
-            """
-            ng = self.number_guard_zones()
-            S = self.driving.source_terms(self.fluid.primitive[ng:-ng,ng:-ng])
-            U1[ng:-ng,ng:-ng] += S * dt
-            self.driving.advance(dt)
+            if len(self.shape) == 2:
+                ng = self.number_guard_zones()
+                self.driving.advance(dt)
+                S = self.driving.source_terms(self.fluid.primitive[ng:-ng,ng:-ng])
+                U1[ng:-ng,ng:-ng] += S * dt
+            elif len(self.shape) == 3:
+                self.driving.advance(dt)
+                self.driving.drive(self, dt)
         except AttributeError:
             # no driving module
             pass
 
-        ng = self.number_guard_zones()
-        self.boundary.set_boundary(U1, ng)
-        self.from_conserved(U1)
         return time.clock() - start
 
     def update_gravity(self):
@@ -199,8 +201,8 @@ class MaraEvolutionOperator(object):
         self.fluid.failmask = 0
         self.fluid.from_conserved(U)
         if self.fluid.failmask.any():
-            raise RuntimeError("cons to prim failed on %d zones" % sum(
-                    self.fluid.failmask != 0))
+            raise RuntimeError("cons to prim failed on %d zones" % (
+                    self.fluid.failmask != 0).sum())
 
     def validate_gravity(self):
         if len(self.shape) > 1:

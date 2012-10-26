@@ -1,4 +1,5 @@
 
+import numpy as np
 
 def plot1d(mara, fields, show=True, **kwargs):
     import matplotlib.pyplot as plt
@@ -39,7 +40,8 @@ def plot2d(mara, fields, show=True, **kwargs):
         plot2d.axes = [plt.subplot(nc,nr,n+1) for n,f in enumerate(fields)]
         axes = plot2d.axes
     for ax, f in zip(axes, fields):
-        lines[f] = ax.imshow(mara.fields[f][ng:-ng,ng:-ng].T, interpolation='nearest')
+        #lines[f] = ax.imshow(mara.fields[f][ng:-ng,ng:-ng].T, interpolation='nearest')
+        lines[f] = ax.imshow(mara.fields[f][:,:].T, interpolation='nearest')
     if show:
         for ax, f in zip(axes, fields):
             ax.set_title(f)
@@ -107,7 +109,5 @@ if __name__ == "__main__":
 
     for arg in args:
         h5f = Hdf5FileWrapper(arg)
-        #print h5f.shape
-        #print h5f.coordinate_grid()
         plot1d(h5f, ["rho", "pre", "vx"], show=(arg is args[-1]))
 
