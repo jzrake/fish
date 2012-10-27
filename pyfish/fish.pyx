@@ -9,7 +9,8 @@ def inverse_dict(d):
     return dict((v,k) for k, v in d.iteritems())
 
 _solvertypes     = {"godunov"    : FISH_GODUNOV,
-                    "spectral"   : FISH_SPECTRAL}
+                    "spectral"   : FISH_SPECTRAL,
+                    "diffusion"  : FISH_DIFFUSION}
 _reconstructions = {"pcm"        : FISH_PCM,
                     "plm"        : FISH_PLM,
                     "weno5"      : FISH_WENO5}

@@ -20,7 +20,6 @@ class MaraEvolutionOperator(object):
         self.driving = getattr(problem, 'driving', None)
         self.poisson_solver = getattr(problem, 'poisson_solver', None)
         self.pressure_floor = 1e-6
-        self.safe_c2p = True
 
         Nx, Ny, Nz = self.fluid.shape + (1,) * (3 - len(self.shape))
 
@@ -191,18 +190,18 @@ class MaraEvolutionOperator(object):
         except ValueError: # no gravity array
             pass
 
-    def from_conserved(self, U):
+    def from_conserved(self, U, safe=True, context=""):
         """
         A safe version of the fluid's from_conserved method.
         """
-        if not self.safe_c2p:
+        if not safe:
             self.fluid.from_conserved(U)
             return
-        self.fluid.failmask = 0
+        self.fluid.userflag = 0
         self.fluid.from_conserved(U)
-        if self.fluid.failmask.any():
-            raise RuntimeError("cons to prim failed on %d zones" % (
-                    self.fluid.failmask != 0).sum())
+        if self.fluid.userflag.any():
+            raise RuntimeError("conserved inversion failed on %d zones %s" % (
+                    (self.fluid.userflag != 0).sum(), context))
 
     def validate_gravity(self):
         if len(self.shape) > 1:
@@ -227,6 +226,24 @@ class MaraEvolutionOperator(object):
             return L + S
         else:
             return L
+
+    def diffusion(self, r):
+        """
+        Applies diffusion across troubled zones, larger r => more diffusion.
+        """
+        start = time.clock()
+        orig = self.scheme.solver_type
+        ng = self.number_guard_zones()
+        dx = [self.dx, self.dy, self.dz]
+        U = self.fluid.conserved()
+        self.boundary.set_boundary(U, ng)
+        self.scheme.solver_type = 'diffusion'
+        L = self.scheme.time_derivative(self.fluid, dx)
+        U += L * r
+        self.boundary.set_boundary(U, ng)
+        self.from_conserved(U, context="after a diffusion step")
+        self.scheme.solver_type = orig
+        return time.clock() - start
 
     def timestep(self, CFL):
         ml = abs(self.fluid.eigenvalues()).max()

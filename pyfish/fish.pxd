@@ -11,6 +11,7 @@ cdef extern from "fish.h":
         FISH_WENO5, # weno-5 reconstruction
         FISH_GODUNOV, # conservative finite volume Riemann-solver intercell fluxes
         FISH_SPECTRAL, # conservative finite differencing of characteristic fields
+        FISH_DIFFUSION, # apply Lax-Friedrichs diffusion (for when things get dicey)
 
         # ---------------------------------------------------------------------------
         # smoothness indicators for WENO reconstruction

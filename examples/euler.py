@@ -16,13 +16,13 @@ def main():
                        tfinal=0.2, v0=0.1, gamma=1.4,
                        fluid='nrhyd', pauls_fix=False, gaussian=True)
     #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    #problem = problems.BrioWuShocktube(fluid='nrhyd',
-    #                                   tfinal=0.2,
-    #                                   geometry='planar', direction='x',
-    #                                   resolution=[128])
+    problem = problems.BrioWuShocktube(fluid='nrhyd',
+                                       tfinal=0.01,
+                                       geometry='cylindrical', direction='x',
+                                       resolution=[64,64])
     #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
-    problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
+    #problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
 
     # Status setup
     status = SimulationStatus()
@@ -39,7 +39,7 @@ def main():
 
     # Scheme setup
     scheme = FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][1]
+    scheme.solver_type = ["godunov", "spectral"][0]
     scheme.reconstruction = "plm"
     scheme.riemann_solver = "hllc"
     scheme.shenzha10_param = 100.0
@@ -80,6 +80,8 @@ def main():
 
         dt = mara.timestep(status.CFL)
         try:
+            #mara.fluid.userflag = 1
+            #wall_step = mara.diffusion(0.001)
             wall_step = mara.advance(dt, rk=3)
         except RuntimeError as e:
             print e
