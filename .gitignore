@@ -1,13 +1,6 @@
-
-/bin/*
-/include/*
-/lib/*
-
-*.o
-*.pyc
-*.np
-*.png
-*.pk
-
+src/*.o
+/examples/euler
+/tests/testfish
+/tests/testfluids
 /pyfish/fish.c
 /pyfish/fish.so

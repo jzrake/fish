@@ -1,9 +1,9 @@
 
 import time
-from pyfish import FishSolver
-from pyfish import problems
-from pyfish.simulation import MaraEvolutionOperator
-from pyfish.plotting import *
+from Mara.capis import FishSolver
+from Mara import problems
+from Mara.simulation import MaraEvolutionOperator
+from Mara.plotting import *
 
 
 class SimulationStatus:
@@ -12,15 +12,15 @@ class SimulationStatus:
 
 def main():
     # Problem options
-    problem_cfg = dict(resolution=[64,64], khat=[1, 2, 0], n0=1,
-                       tfinal=0.2, v0=0.1, gamma=1.4,
-                       fluid='nrhyd', pauls_fix=False, gaussian=True)
+    problem_cfg = dict(resolution=[32], khat=[1, 0, 0], n0=2,
+                       tfinal=0.2, v0=0.0, gamma=1.4,
+                       fluid='gravs', pauls_fix=False, gaussian=True)
     #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = problems.BrioWuShocktube(fluid='nrhyd',
-                                       tfinal=0.01,
-                                       geometry='cylindrical', direction='x',
-                                       resolution=[64,64])
-    #problem = problems.PeriodicDensityWave(**problem_cfg)
+    #problem = problems.BrioWuShocktube(fluid='nrhyd',
+    #                                   tfinal=0.01,
+    #                                   geometry='cylindrical', direction='x',
+    #                                   resolution=[64,64])
+    problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
     #problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
 
@@ -48,7 +48,7 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = False
+    plot_initial = True
     plot_final = True
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 

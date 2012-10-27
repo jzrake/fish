@@ -146,7 +146,7 @@ def test_pdf(driving):
 
 def test_streamlines(driving):
     import matplotlib.pyplot as plt
-    from pyfish.streamplot import streamplot
+    from streamplot import streamplot
     Fx, Fy = driving.field
     x = np.linspace(0.0, 1.0, Fx.shape[0])
     y = np.linspace(0.0, 1.0, Fy.shape[1])
@@ -170,7 +170,7 @@ def test_image(driving):
 
 def test_divergence(driving):
     import matplotlib.pyplot as plt
-    from pyfish.streamplot import streamplot
+    from streamplot import streamplot
     Fx, Fy = driving.field
     Gx, Gy = fftn(Fx), fftn(Fy)
     Kx, Ky = driving.wave_number()

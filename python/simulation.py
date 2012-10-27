@@ -3,7 +3,7 @@ import os
 import time
 import cPickle
 import numpy as np
-import pyfluids
+from Mara.capis import FluidStateVector
 
 
 class MaraEvolutionOperator(object):
@@ -14,7 +14,7 @@ class MaraEvolutionOperator(object):
         ng = self.number_guard_zones()
 
         self.shape = tuple([n + 2*ng for n in problem.resolution])
-        self.fluid = pyfluids.FluidStateVector(self.shape, descr)
+        self.fluid = FluidStateVector(self.shape, descr)
         self.scheme = scheme
         self.boundary = problem.build_boundary(self)
         self.driving = getattr(problem, 'driving', None)

@@ -2,8 +2,8 @@
 import os
 import numpy as np
 import cowpy
-from pyfish.simulation import MaraEvolutionOperator
-from pyfluids import FluidStateVector
+from simulation import MaraEvolutionOperator
+from Mara.capis import FluidStateVector
 
 
 class ParallelSimulation(MaraEvolutionOperator):

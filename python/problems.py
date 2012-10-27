@@ -1,7 +1,7 @@
 
 import numpy as np
-import pyfluids
-from pyfish import boundary, driving, gravity
+from Mara.capis import FluidDescriptor
+from Mara import boundary, driving, gravity
 
 
 class TestProblem(object):
@@ -14,8 +14,7 @@ class TestProblem(object):
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
             setattr(self, k, v)
-        self._descr = pyfluids.FluidDescriptor(fluid=self.fluid,
-                                               gamma=self.gamma)
+        self._descr = FluidDescriptor(fluid=self.fluid, gamma=self.gamma)
 
     @property
     def fluid_descriptor(self):
