@@ -80,6 +80,12 @@ class MaraEvolutionOperator(object):
     def number_guard_zones(self):
         return 3
 
+    def number_nonzero(self, X):
+        """
+        Return the number of nonzero entries of the array X
+        """
+        return (X != 0).sum()
+
     def coordinate_grid(self):
         ng = self.number_guard_zones()
         Nx, Ny, Nz = self.Nx, self.Ny, self.Nz
@@ -199,9 +205,10 @@ class MaraEvolutionOperator(object):
             return
         self.fluid.userflag = 0
         self.fluid.from_conserved(U)
-        if self.fluid.userflag.any():
+        numerr = self.number_nonzero(self.fluid.userflag)
+        if numerr != 0:
             raise RuntimeError("conserved inversion failed on %d zones %s" % (
-                    (self.fluid.userflag != 0).sum(), context))
+                    numerr, context))
 
     def validate_gravity(self):
         if len(self.shape) > 1:

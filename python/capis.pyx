@@ -482,7 +482,7 @@ cdef class FluidStateVector(FluidState):
     def from_conserved(self, U):
         if U.shape != self.states.shape + (self._np,):
             raise ValueError("wrong size input array")
-        cdef int n, e
+        cdef int n, e, numerr
         cdef FluidState S
         cdef np.ndarray[np.double_t] x = U.reshape([U.size])
         for n in range(self.states.size):
@@ -490,6 +490,8 @@ cdef class FluidStateVector(FluidState):
             e = fluids_state_fromcons(S._c, <double*>x.data + n*self._np,
                                       FLUIDS_CACHE_DEFAULT)
             if e != 0: self._userflag.flat[n] = e
+            numerr += (e != 0)
+        return numerr
 
     def conserved(self):
         return self._derive(FLUIDS_CONSERVED, self._np)

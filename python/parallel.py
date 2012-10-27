@@ -38,6 +38,9 @@ class ParallelSimulation(MaraEvolutionOperator):
         self.X0, self.X1 = X0, X1
 
         class ParallelSynchronization(object):
+            """
+            Currently restricted to periodic BC's
+            """
             def __init__(self, mara):
                 members = ['rho', 'pre', 'vx', 'vy', 'vz']
                 self.domain = mara.domain
@@ -49,6 +52,12 @@ class ParallelSimulation(MaraEvolutionOperator):
                 self.field.sync_guard()
 
         self.boundary = ParallelSynchronization(self)
+
+    def number_nonzero(self, X):
+        """
+        Return the number of nonzero entries of the array X, over all subgrids.
+        """
+        return self.domain.reduce((X != 0).sum(), type=int, op='sum')
 
     def write_checkpoint(self, status, dir=".", **extras):
         if self.domain.cart_rank == 0:

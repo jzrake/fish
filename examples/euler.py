@@ -1,10 +1,9 @@
 
 import time
 from Mara.capis import FishSolver
-from Mara import problems
 from Mara.simulation import MaraEvolutionOperator
 from Mara.plotting import *
-
+from Mara import problems
 
 class SimulationStatus:
     pass
@@ -20,9 +19,9 @@ def main():
     #                                   tfinal=0.01,
     #                                   geometry='cylindrical', direction='x',
     #                                   resolution=[64,64])
-    problem = problems.PeriodicDensityWave(**problem_cfg)
+    #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
-    #problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
+    problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
 
     # Status setup
     status = SimulationStatus()
@@ -32,7 +31,7 @@ def main():
     status.time_current = 0.0
     status.chkpt_number = 0
     status.chkpt_last = 0.0
-    status.chkpt_interval = 2.0
+    status.chkpt_interval = 1.0
     status.clock_start = time.clock()
     status.accum_wall = 0.0
     measlog = { }
@@ -53,10 +52,10 @@ def main():
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     # Runtime options
-    parallel = False
+    parallel = True
 
     if parallel:
-        from pyfish.parallel import ParallelSimulation
+        from Mara.parallel import ParallelSimulation
         mara = ParallelSimulation(problem, scheme)
     else:
         mara = MaraEvolutionOperator(problem, scheme)

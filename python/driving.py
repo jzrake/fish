@@ -28,7 +28,6 @@ class DrivingModule3d(object):
         self._calls += 1
         if self._calls % 10 == 0 or not hasattr(self, '_F'):
             X, Y, Z = mara.coordinate_grid()
-            start = time.clock()
             self._F = self.sample(X, Y, Z)
         mara.fluid.primitive[...,2:5] += self._F * dt
 
