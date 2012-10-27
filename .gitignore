@@ -2,5 +2,6 @@ src/*.o
 /examples/euler
 /tests/testfish
 /tests/testfluids
-/pyfish/fish.c
-/pyfish/fish.so
+/build/*
+/lib/*
+

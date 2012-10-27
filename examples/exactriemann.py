@@ -4,7 +4,7 @@ from traits.api import HasTraits, Int, Range, Array, List, Property, Enum
 from enthought.traits.ui.api import View, Group, VGroup, HGroup, Item
 from chaco.chaco_plot_editor import ChacoPlotItem
 import numpy as np
-import pyfluids
+from Mara.capis import *
 
 
 class RiemannApp(HasTraits):
@@ -30,14 +30,14 @@ class RiemannApp(HasTraits):
         return np.linspace(-2, 2, self.npoints)
 
     def _get_soln(self):
-        descr = pyfluids.FluidDescriptor()
-        SL = pyfluids.FluidState(descr)
-        SR = pyfluids.FluidState(descr)
+        descr = FluidDescriptor()
+        SL = FluidState(descr)
+        SR = FluidState(descr)
 
         SL.primitive = np.array([self.rhoL, self.preL, 0, 0, 0])
         SR.primitive = np.array([self.rhoR, self.preR, 0, 0, 0])
 
-        solver = pyfluids.RiemannSolver()
+        solver = RiemannSolver()
         solver.solver = self.solver
         solver.set_states(SL, SR)
         y = np.array([solver.sample(xi).primitive for xi in self.xdat])

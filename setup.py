@@ -13,6 +13,7 @@ capis = Extension("Mara.capis",
                   extra_compile_args = ["-std=c99"],
                   include_dirs=["src", np.get_include()])
 
+os.system('make -C python')
 setup(name='Mara',
       packages=['Mara'],
       package_dir={'Mara': 'python'},
