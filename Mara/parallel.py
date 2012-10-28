@@ -69,16 +69,18 @@ class ParallelSimulation(MaraEvolutionOperator):
                 print "creating data directory", dir
             except OSError: # Directory exists
                 pass
-            h5f = h5py.File(chkpt_name, 'r+')
+            h5f = h5py.File(chkpt_name, 'w')
             chkpt = { "problem": self.problem,
                       "status": status.__dict__ }
             for k,v in chkpt.items():
-                if k in h5f.keys():
-                    print "overwriting", k
-                    del h5f[k]
-                print "trying to pickle", k, v
-                h5f[k] = cPickle.dumps(v)
+                if type(v) is dict:
+                    grp = h5f.create_group(k)
+                    for k1,v1 in v.items():
+                        grp[k1] = v1
+                else:
+                    h5f[k] = cPickle.dumps(v)
             h5f.close()
+
         field = cowpy.DataField(self.domain, buffer=self.fluid.primitive,
                                 members=['rho', 'pre', 'vx', 'vy', 'vz'],
                                 name='prim')
