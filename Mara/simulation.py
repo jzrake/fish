@@ -19,7 +19,7 @@ class MaraEvolutionOperator(object):
         self.boundary = problem.build_boundary(self)
         self.driving = getattr(problem, 'driving', None)
         self.poisson_solver = getattr(problem, 'poisson_solver', None)
-        self.pressure_floor = 1e-6
+        self.problem = problem
 
         Nx, Ny, Nz = self.fluid.shape + (1,) * (3 - len(self.shape))
 
@@ -43,16 +43,15 @@ class MaraEvolutionOperator(object):
                 'phi': G[...,0] if self.fluid.descriptor.ngravity else None,
                 'gph': G[...,1] if self.fluid.descriptor.ngravity else None}
 
-    def write_checkpoint(self, status, dir=".", update_status=True, **extras):
-        if update_status:
-            status.chkpt_last = status.time_current
-            status.chkpt_number += 1
+    def write_checkpoint(self, status, dir=".", **extras):
         try:
             os.makedirs(dir)
             print "creating data directory", dir
         except OSError: # Directory exists
             pass
-        chkpt = { "prim": self.fluid.primitive, "status": status.__dict__ }
+        chkpt = { "prim": self.fluid.primitive,
+                  "problem": self.problem,
+                  "status": status.__dict__ }
         chkpt.update(extras)
         chkpt_name = "%s/chkpt.%04d.pk" % (dir, status.chkpt_number)
         chkpt_file = open(chkpt_name, 'w')

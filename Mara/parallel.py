@@ -1,7 +1,9 @@
 
 import os
+import cPickle
 import numpy as np
 import cowpy
+import h5py
 from simulation import MaraEvolutionOperator
 from Mara.capis import FluidStateVector
 
@@ -24,8 +26,8 @@ class ParallelSimulation(MaraEvolutionOperator):
         self.scheme = scheme
         self.driving = getattr(problem, 'driving', None)
         self.poisson_solver = getattr(problem, 'poisson_solver', None)
-        self.pressure_floor = 1e-6
         self.domain = domain
+        self.problem = problem
 
         Nx, Ny, Nz = self.fluid.shape + (1,) * (3 - len(self.shape))
 
@@ -60,16 +62,26 @@ class ParallelSimulation(MaraEvolutionOperator):
         return self.domain.reduce((X != 0).sum(), type=int, op='sum')
 
     def write_checkpoint(self, status, dir=".", **extras):
+        chkpt_name = "%s/chkpt.%04d.h5" % (dir, status.chkpt_number)
         if self.domain.cart_rank == 0:
             try:
                 os.makedirs(dir)
                 print "creating data directory", dir
             except OSError: # Directory exists
                 pass
+            h5f = h5py.File(chkpt_name, 'r+')
+            chkpt = { "problem": self.problem,
+                      "status": status.__dict__ }
+            for k,v in chkpt.items():
+                if k in h5f.keys():
+                    print "overwriting", k
+                    del h5f[k]
+                print "trying to pickle", k, v
+                h5f[k] = cPickle.dumps(v)
+            h5f.close()
         field = cowpy.DataField(self.domain, buffer=self.fluid.primitive,
                                 members=['rho', 'pre', 'vx', 'vy', 'vz'],
                                 name='prim')
-        chkpt_name = "%s/chkpt.%04d.h5" % (dir, status.chkpt_number)
         print "Writing checkpoint", chkpt_name
         field.dump(chkpt_name)
 

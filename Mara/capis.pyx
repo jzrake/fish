@@ -188,19 +188,19 @@ cdef class FluidDescriptor(object):
             fluids_descr_getfluid(self._c, &val)
             return _fluidsystem_i[val]
 
-    property eos:
-        def __get__(self):
-            cdef int val
-            fluids_descr_geteos(self._c, &val)
-            return _equationofstate_i[val]
-
     property coordsystem:
         def __get__(self):
             cdef int val
             fluids_descr_getcoordsystem(self._c, &val)
             return _coordsystem_i[val]
 
-    property gammalawindex:
+    property eos:
+        def __get__(self):
+            cdef int val
+            fluids_descr_geteos(self._c, &val)
+            return _equationofstate_i[val]
+
+    property gamma:
         def __get__(self):
             cdef double val
             fluids_descr_getgamma(self._c, &val)
@@ -229,6 +229,16 @@ cdef class FluidDescriptor(object):
     property nlocation:
         def __get__(self):
             return fluids_descr_getncomp(self._c, FLUIDS_LOCATION)
+
+    def __reduce__(self):
+        props = [getattr(self, k) for k in
+                 ['fluid', 'coordsystem', 'eos', 'gamma']]
+        state = {'rhobar': self.rhobar}
+        return (FluidDescriptor, tuple(props), state)
+
+    def __setstate__(self, props):
+        for k, v in props.iteritems():
+            setattr(self, k, v)
 
 
 cdef class FluidState(object):
