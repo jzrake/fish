@@ -10,6 +10,7 @@ class TestProblem(object):
     upper_bounds = [+0.5, +0.5, +0.5]
     resolution = [128]
     plot_fields = ['rho', 'pre', 'vx']
+    parallel = False
 
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
@@ -25,6 +26,87 @@ class TestProblem(object):
 
     def ginit(self, x, y, z):
         return 0.0
+
+    def keep_running(self, status):
+        return status.time_current < self.tfinal
+
+
+class TwoStateProblem(TestProblem):
+    fluid = 'nrhyd'
+    gamma = 1.4
+    tfinal = 0.2
+    geometry = 'planar'
+    direction = 'x'
+
+    def __init__(self, *args, **kwargs):
+        super(TwoStateProblem, self).__init__(*args, **kwargs)
+        if len(self.resolution) == 2:
+            self.plot_fields.append('vy')
+
+    def pinit(self, x, y, z):
+        if self.geometry == 'planar':
+            r = {'x': x, 'y': y, 'z': z}[self.direction]
+            R = 0.0
+        elif self.geometry == 'cylindrical':
+            r = (x**2 + y**2)**0.5
+            R = 0.125
+        elif self.geometry == 'spherical':
+            r = (x**2 + y**2 + z**2)**0.5
+            R = 0.125
+        else:
+            raise ValueError("invalid problem geometry: %s" % self.geometry)
+        if r > R:
+            return self.state2
+        else:
+            return self.state1
+
+
+class Shocktube1(TwoStateProblem):
+    state1 = [1.000, 1.000, 0.000, 0.0, 0.0]
+    state2 = [0.125, 0.100, 0.000, 0.0, 0.0]
+
+
+class Shocktube2(TwoStateProblem):
+    state1 = [1.000, 0.400,-2.000, 0.0, 0.0]
+    state2 = [1.000, 0.400, 2.000, 0.0, 0.0]
+
+
+class Shocktube3(TwoStateProblem):
+    state1 = [1.0, 1e+3, 0.0, 0.0, 0.0]
+    state2 = [1.0, 1e-2, 0.0, 0.0, 0.0]
+
+
+class Shocktube4(TwoStateProblem):
+    state1 = [1.0, 1e-2, 0.0, 0.0, 0.0]
+    state2 = [1.0, 1e+2, 0.0, 0.0, 0.0]
+
+
+class Shocktube5(TwoStateProblem):
+    state1 = [5.99924, 460.894, 19.59750, 0.0, 0.0]
+    state2 = [5.99924,  46.095, -6.19633, 0.0, 0.0]
+
+
+class ContactWave(TwoStateProblem):
+    state1 = [1.0, 1.0, 0.0, 0.7, 0.2]
+    state2 = [0.1, 1.0, 0.0, 0.7, 0.2]
+
+
+class SrhdCase1_DFIM98(TwoStateProblem):
+    fluid = 'srhyd'
+    state1 = [10.0, 13.30, 0.0, 0.0, 0.0]
+    state2 = [ 1.0,  1e-6, 0.0, 0.0, 0.0]
+
+
+class SrhdCase2_DFIM98(TwoStateProblem):
+    fluid = 'srhyd'
+    state1 = [1, 1e+3, 0.0, 0.0, 0.0]
+    state2 = [1, 1e-2, 0.0, 0.0, 0.0]
+
+
+class SrhdHardTransverse_RAM(TwoStateProblem):
+    fluid = 'srhyd'
+    state1 = [1, 1e+3, 0.0, 0.9, 0.0]
+    state2 = [1, 1e-2, 0.0, 0.9, 0.0]
 
 
 class OneDimensionalUpsidedownGaussian(TestProblem):
@@ -75,7 +157,7 @@ class OneDimensionalPolytrope(TestProblem):
     gaussian = False
 
     def __init__(self, *args, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
+        super(OneDimensionalPolytrope, self).__init__(*args, **kwargs)
         if self.selfgrav:
             self.poisson_solver = gravity.PoissonSolver1d()
 
@@ -122,7 +204,7 @@ class PeriodicDensityWave(TestProblem):
     plot_fields = ['rho', 'vx']
 
     def __init__(self, *args, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
+        super(PeriodicDensityWave, self).__init__(*args, **kwargs)
         if self.fluid in ['gravs', 'gravp']:
             self.plot_fields.append('phi')
             self.poisson_solver = gravity.PoissonSolver1d()
@@ -143,44 +225,13 @@ class PeriodicDensityWave(TestProblem):
         return boundary.Periodic()
 
 
-class BrioWuShocktube(TestProblem):
-    fluid = 'nrhyd'
-    gamma = 1.4
-    tfinal = 0.2
-    geometry = 'planar'
-    direction = 'x'
-
-    def __init__(self, *args, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
-        if len(self.resolution) == 2:
-            self.plot_fields.append('vy')
-
-    def pinit(self, x, y, z):
-        if self.geometry == 'planar':
-            r = {'x': x, 'y': y, 'z': z}[self.direction]
-            R = 0.0
-        elif self.geometry == 'cylindrical':
-            r = (x**2 + y**2)**0.5
-            R = 0.125
-        elif self.geometry == 'spherical':
-            r = (x**2 + y**2 + z**2)**0.5
-            R = 0.125
-        else:
-            raise ValueError("invalid problem geometry: %s" % self.geometry)
-
-        if r > R:
-            return [0.125, 0.100, 0.0, 0.0, 0.0]
-        else:
-            return [1.000, 1.000, 0.0, 0.0, 0.0]
-
-
 class DrivenTurbulence2d(TestProblem):
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 1.0
     resolution = [128, 128]
     def __init__(self, *args, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
+        super(DrivenTurbulence2d, self).__init__(*args, **kwargs)
         self.driving = driving.DrivingModule2d(self.resolution)
 
     def pinit(self, x, y, z):
@@ -196,7 +247,7 @@ class DrivenTurbulence3d(TestProblem):
     tfinal = 1.0
     resolution = [16, 16, 16]
     def __init__(self, *args, **kwargs):
-        super(self.__class__, self).__init__(*args, **kwargs)
+        super(DrivenTurbulence3d, self).__init__(*args, **kwargs)
         self.driving = driving.DrivingModule3d()
 
     def pinit(self, x, y, z):

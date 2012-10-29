@@ -11,15 +11,10 @@ from Mara.capis import FluidStateVector
 class ParallelSimulation(MaraEvolutionOperator):
 
     def __init__(self, problem, scheme):
+
         ng = self.number_guard_zones()
         domain = cowpy.DistributedDomain(problem.resolution, guard=ng)
         descr = problem.fluid_descriptor
-
-        x0 = np.array(problem.lower_bounds)
-        x1 = np.array(problem.upper_bounds)
-        dX = (x1 - x0) / domain.global_shape
-        X0 = x0 + dX * domain.global_start
-        X1 = X0 + dX * domain.local_shape
 
         self.shape = tuple([n + 2*ng for n in domain.local_shape])
         self.fluid = FluidStateVector(self.shape, descr)
@@ -29,7 +24,16 @@ class ParallelSimulation(MaraEvolutionOperator):
         self.domain = domain
         self.problem = problem
 
-        Nx, Ny, Nz = self.fluid.shape + (1,) * (3 - len(self.shape))
+        def pad_out(x, v):
+            return x + (v,) * (3 - len(self.shape))
+
+        x0 = np.array(problem.lower_bounds)
+        x1 = np.array(problem.upper_bounds)
+        dX = (x1 - x0) / pad_out(domain.global_shape, 1)
+        X0 = x0 + dX * pad_out(domain.global_start, 0)
+        X1 = X0 + dX * pad_out(domain.local_shape, 1)
+
+        Nx, Ny, Nz = pad_out(self.fluid.shape, 1)
 
         dx = (X1[0] - X0[0])/(Nx - (2*ng if Nx > 1 else 0))
         dy = (X1[1] - X0[1])/(Ny - (2*ng if Ny > 1 else 0))

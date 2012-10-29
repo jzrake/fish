@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     class Hdf5FileWrapper(h5py.File):
         def __init__(self, *args, **kwargs):
-            super(self.__class__, self).__init__(*args, **kwargs)
+            super(Hdf5FileWrapper, self).__init__(*args, **kwargs)
 
         @property
         def fields(self):

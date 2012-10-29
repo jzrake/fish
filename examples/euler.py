@@ -5,6 +5,7 @@ from Mara.simulation import MaraEvolutionOperator
 from Mara.plotting import *
 from Mara import problems
 
+
 class SimulationStatus:
     pass
 
@@ -15,23 +16,23 @@ def main():
                        tfinal=0.2, v0=0.0, gamma=1.4,
                        fluid='gravs', pauls_fix=False, gaussian=True)
     #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    #problem = problems.BrioWuShocktube(fluid='nrhyd',
-    #                                   tfinal=0.01,
-    #                                   geometry='cylindrical', direction='x',
-    #                                   resolution=[64,64])
+    problem = problems.Shocktube1(fluid='nrhyd',
+                                  tfinal=0.01,
+                                  geometry='planar', direction='x',
+                                  resolution=[256])
     #problem = problems.PeriodicDensityWave(**problem_cfg)
     #problem = problems.DrivenTurbulence2d(tfinal=0.01)
-    problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[16,16,16])
+    #problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[64,64,64])
 
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.3
+    status.CFL = 0.8
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
     status.chkpt_number = 0
     status.chkpt_last = 0.0
-    status.chkpt_interval = 1.0
+    status.chkpt_interval = 0.1
     status.clock_start = time.clock()
     status.accum_wall = 0.0
     measlog = { }
@@ -47,20 +48,18 @@ def main():
     # Plotting options
     plot_fields = problem.plot_fields
     plot_interactive = False
-    plot_initial = True
+    plot_initial = False
     plot_final = True
     plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     # Runtime options
-    parallel = True
+    problem.parallel = False
 
-    if parallel:
+    if problem.parallel:
         from Mara.parallel import ParallelSimulation
         mara = ParallelSimulation(problem, scheme)
     else:
         mara = MaraEvolutionOperator(problem, scheme)
-
-    mara.safe_c2p = True
     mara.initial_model(problem.pinit, problem.ginit)
 
     if plot_interactive:
@@ -68,19 +67,17 @@ def main():
         plt.ion()
         lines = plot(mara, plot_fields, show=False)
 
-    if plot_initial and not parallel:
+    if plot_initial and not problem.parallel:
         plot(mara, plot_fields, show=False, label='start')
 
-    while status.time_current < problem.tfinal:
-        if plot_interactive and not parallel:
+    while problem.keep_running(status):
+        if plot_interactive and not problem.parallel:
             for f in plot_fields:
                 lines[f].set_ydata(mara.fields[f])
             plt.draw()
 
         dt = mara.timestep(status.CFL)
         try:
-            #mara.fluid.userflag = 1
-            #wall_step = mara.diffusion(0.001)
             wall_step = mara.advance(dt, rk=3)
         except RuntimeError as e:
             print e
@@ -116,7 +113,7 @@ def main():
     print "\n"
 
     mara.set_boundary()
-    if plot_final and not parallel:
+    if plot_final and not problem.parallel:
         plot(mara, plot_fields, show=True, label='end')
 
 
