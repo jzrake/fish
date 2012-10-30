@@ -230,9 +230,12 @@ class DrivenTurbulence2d(TestProblem):
     gamma = 1.4
     tfinal = 1.0
     resolution = [128, 128]
+    plot_fields = ['rho', 'pre', 'vx', 'vy']
     def __init__(self, *args, **kwargs):
         super(DrivenTurbulence2d, self).__init__(*args, **kwargs)
-        self.driving = driving.DrivingModule2d(self.resolution)
+        self.driving = driving.DrivingModule2d()
+        if len(self.resolution) != 2:
+            raise ValueError("problem needs a 2d domain")
 
     def pinit(self, x, y, z):
         return [1.0, 1.0, 0.0, 0.0, 0.0]
@@ -249,6 +252,8 @@ class DrivenTurbulence3d(TestProblem):
     def __init__(self, *args, **kwargs):
         super(DrivenTurbulence3d, self).__init__(*args, **kwargs)
         self.driving = driving.DrivingModule3d()
+        if len(self.resolution) != 3:
+            raise ValueError("problem needs a 3d domain")
 
     def pinit(self, x, y, z):
         return [1.0, 1.0, 0.0, 0.0, 0.0]

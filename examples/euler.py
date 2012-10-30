@@ -21,7 +21,7 @@ class PlottingOptions:
 def main(problem, scheme, plot):
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.8
+    status.CFL = 0.4
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0

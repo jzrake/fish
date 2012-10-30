@@ -151,12 +151,7 @@ class MaraEvolutionOperator(object):
         self.from_conserved(U1)
 
         try:
-            if len(self.shape) == 2:
-                ng = self.number_guard_zones()
-                self.driving.advance(dt)
-                S = self.driving.source_terms(self.fluid.primitive[ng:-ng,ng:-ng])
-                U1[ng:-ng,ng:-ng] += S * dt
-            elif len(self.shape) == 3:
+            if len(self.shape) in [2, 3]:
                 self.driving.advance(dt)
                 self.driving.drive(self, dt)
         except AttributeError:
