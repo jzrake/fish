@@ -2,15 +2,18 @@
 import numpy as np
 from Mara.capis import FluidDescriptor
 from Mara import boundary, driving, gravity
+from Mara.utils import init_options
 
 
 class TestProblem(object):
+    __metaclass__ = init_options
     tfinal = 1.0
     lower_bounds = [-0.5, -0.5, -0.5]
     upper_bounds = [+0.5, +0.5, +0.5]
     resolution = [128]
     plot_fields = ['rho', 'pre', 'vx']
     parallel = False
+    CFL = 0.3
 
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
@@ -32,6 +35,7 @@ class TestProblem(object):
 
 
 class TwoStateProblem(TestProblem):
+    __metaclass__ = init_options
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 0.2
@@ -116,6 +120,7 @@ class OneDimensionalUpsidedownGaussian(TestProblem):
     rho$ does not have to be satisfied. Sets up an upside-down Gaussian
     potential well with a pressure profile in hydrostatic equillibrium.
     '''
+    __metaclass__ = init_options
     fluid = 'gravs'
     gamma = 1.4
     sig = 0.05
@@ -145,6 +150,7 @@ class OneDimensionalPolytrope(TestProblem):
     Provides the initial conditions of a 1d polytrope for Gamma=2. Pressure
     density satisfy Poisson equation and hydrostatic equillibrium.
     '''
+    __metaclass__ = init_options
     fluid = 'gravs' # or gravp, grave
     gamma = 2.0
     Dc = 1.0 # central density
@@ -193,6 +199,7 @@ class PeriodicDensityWave(TestProblem):
     '''
     Gives a stationary density wave without pressure variation.
     '''
+    __metaclass__ = init_options
     fluid = 'nrhyd'
     gamma = 1.4
     p0 = 1.00 # background pressure
@@ -226,6 +233,7 @@ class PeriodicDensityWave(TestProblem):
 
 
 class DrivenTurbulence2d(TestProblem):
+    __metaclass__ = init_options
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 1.0
@@ -245,6 +253,7 @@ class DrivenTurbulence2d(TestProblem):
 
 
 class DrivenTurbulence3d(TestProblem):
+    __metaclass__ = init_options
     fluid = 'nrhyd'
     gamma = 1.4
     tfinal = 1.0

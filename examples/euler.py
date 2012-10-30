@@ -6,12 +6,14 @@ import time
 from Mara.capis import FishSolver
 from Mara.simulation import MaraEvolutionOperator
 from Mara.plotting import *
+from Mara.utils import init_options
 from Mara import problems
 
 
 class SimulationStatus: pass
 
 class PlottingOptions:
+    __metaclass__ = init_options
     interactive = False
     initial     = False
     final       = False
@@ -21,7 +23,7 @@ class PlottingOptions:
 def main(problem, scheme, plot):
     # Status setup
     status = SimulationStatus()
-    status.CFL = 0.4
+    status.CFL = problem.CFL
     status.iteration = 0
     status.time_step = 0.0
     status.time_current = 0.0
@@ -102,27 +104,89 @@ def main(problem, scheme, plot):
 
 if __name__ == "__main__":
     parser = optparse.OptionParser()
-    opts, args = parser.parse_args()
-
-    problem_cfg = { }
     scheme = FishSolver()
     plot = PlottingOptions()
 
+    parser.add_option("--dry-run", action="store_true",
+                      help="just print run configuation and exit")
+
+    def add_option(g, k, v):
+        if type(v) in [int, float, str]:
+            g.add_option('--'+k, default=v, metavar=v, type=type(v))
+        elif type(v) is bool:
+            if v:
+                g.add_option('--no-'+k, action='store_false', metavar=v)
+            else:
+                g.add_option('--'+k, action='store_true', metavar=v)
+        """
+        elif type(v) is list:
+            if type(v[0]) is str:
+                g.add_option('--'+k, default=','.join(v), metavar=','.join(v))
+                """
+    if len(sys.argv) > 1:
+        runparam = imp.load_source("runparam", sys.argv[1])
+    else:
+        runparam = imp.new_module("runparam")
+
     try:
-        runparam = imp.load_source("runparam", args[0])
+        problem_cls = runparam.problem_cls
+    except AttributeError:
+        problem_cls = problems.get_problem_class()
 
-        for k,v in getattr(runparam, 'problem_cfg', { }).items():
-            problem_cfg[k] = v
+    # get the options dict from configurable objects
+    problem_cfg = problem_cls.options
+    scheme_cfg = scheme.options
+    plotting_cfg = plot.options
 
-        for k,v in getattr(runparam, 'scheme_cfg', { }).items():
-            setattr(scheme, k, v)
+    # create corresponding options groups for command line parsing
+    problem_opt = optparse.OptionGroup(parser, "problem settings for %s" %
+                                       problem_cls.__name__)
+    scheme_opt = optparse.OptionGroup(parser, "scheme settings")
+    plotting_opt = optparse.OptionGroup(parser, "plotting settings")
 
-        for k,v in getattr(runparam, 'plotting_cfg', { }).items():
-            setattr(plot, k, v)
+    # populate those groups with default values
+    for k,v in problem_cfg.items(): add_option(problem_opt, k, v)
+    for k,v in scheme_cfg.items(): add_option(scheme_opt, k, v)
+    for k,v in plotting_cfg.items(): add_option(plotting_opt, k, v)
 
-    except IndexError: # no args[0]
-        pass
+    # add the option groups to the parser
+    parser.add_option_group(problem_opt)
+    parser.add_option_group(scheme_opt)
+    parser.add_option_group(plotting_opt)
+    opts, args = parser.parse_args()
 
-    problem_class = problems.get_problem_class()
-    problem = problem_class(**problem_cfg)
-    main(problem, scheme, plot)
+    # get runtime config from runparam module and update confgurable objects
+    for k,v in getattr(runparam, 'problem_cfg', { }).items():
+        problem_cfg[k] = v
+    for k,v in getattr(runparam, 'scheme_cfg', { }).items():
+        scheme_cfg[k] = v
+    for k,v in getattr(runparam, 'plotting_cfg', { }).items():
+        plotting_cfg[k] = v
+
+
+    # add command line options to configurable objects
+    for k,v in opts.__dict__.items():
+        if k in problem_cfg: problem_cfg[k] = v
+        if k in scheme_cfg: scheme_cfg[k] = v
+        if k in plotting_cfg: plotting_cfg[k] = v
+
+    print "\n"
+    print "run configuration:"
+    print "------------------"
+    print "\n  problem settings:"
+    for k,v in problem_cfg.items():
+        print "    %s: %s" % (k, v)
+    print "\n  scheme settings:"
+    for k,v in scheme_cfg.items():
+        print "    %s: %s" % (k, v)
+    print "\n  plotting settings:"
+    for k,v in plotting_cfg.items():
+        print "    %s: %s" % (k, v)
+    print "\n"
+
+    for k,v in scheme_cfg.items(): setattr(scheme, k, v)
+    for k,v in plotting_cfg.items(): setattr(plot, k, v)
+
+    if not opts.dry_run:
+        problem = problem_cls(**problem_cfg)
+        main(problem, scheme, plot)
