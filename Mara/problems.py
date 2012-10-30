@@ -303,3 +303,22 @@ def ginit(self, x, y, z):
         phi = abs(x) * self.four_pi_G * s
         gph = self.four_pi_G * s * np.sign(x)
     return [phi, gph, 0.0, 0.0]
+
+
+def get_problem_class():
+    import problems
+    opts = { }
+    for k,v in problems.__dict__.iteritems():
+        if type(v) is type and v not in [problems.TestProblem,
+                                         problems.TwoStateProblem]:
+            if issubclass(v, problems.TestProblem):
+                opts[k] = v
+    for n, k in enumerate(sorted(opts.keys())):
+        print "[%2d]: %s" % (n, k)
+
+    def ask():
+        try:
+            return opts[sorted(opts.keys())[input("enter a problem: ")]]
+        except IndexError:
+            return ask()
+    return ask()

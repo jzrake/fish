@@ -126,6 +126,15 @@ cdef class FishSolver(object):
                 raise ValueError("shenzha10_param must be between 0 and 100")
             fish_setparamd(self._c, plm_theta, FISH_SHENZHA10_PARAM)
 
+    def __repr__(self):
+        props = ["%s" % (type(self)),
+                 'solver_type: %s' % self.solver_type,
+                 'reconstruction: %s' % self.reconstruction,
+                 'riemann_solver: %s' % self.riemann_solver,
+                 'shenzha10_param: %f' % self.shenzha10_param,
+                 'smoothness_indicator: %s' % self.smoothness_indicator]
+        return "{" + "\n\t".join(props) + "}"
+
 
 _fluidsystem = {"nrhyd"         : FLUIDS_NRHYD,
                 "gravs"         : FLUIDS_GRAVS,

@@ -1,4 +1,7 @@
 
+import optparse
+import imp
+import sys
 import time
 from Mara.capis import FishSolver
 from Mara.simulation import MaraEvolutionOperator
@@ -6,24 +9,16 @@ from Mara.plotting import *
 from Mara import problems
 
 
-class SimulationStatus:
-    pass
+class SimulationStatus: pass
+
+class PlottingOptions:
+    interactive = False
+    initial     = False
+    final       = False
+    fields      = None
 
 
-def main():
-    # Problem options
-    problem_cfg = dict(resolution=[32], khat=[1, 0, 0], n0=2,
-                       tfinal=0.2, v0=0.0, gamma=1.4,
-                       fluid='gravs', pauls_fix=False, gaussian=True)
-    #problem = problems.OneDimensionalPolytrope(selfgrav=True, **problem_cfg)
-    problem = problems.Shocktube1(fluid='nrhyd',
-                                  tfinal=0.01,
-                                  geometry='planar', direction='x',
-                                  resolution=[256])
-    #problem = problems.PeriodicDensityWave(**problem_cfg)
-    #problem = problems.DrivenTurbulence2d(tfinal=0.01)
-    #problem = problems.DrivenTurbulence3d(tfinal=0.5, resolution=[64,64,64])
-
+def main(problem, scheme, plot):
     # Status setup
     status = SimulationStatus()
     status.CFL = 0.8
@@ -37,23 +32,10 @@ def main():
     status.accum_wall = 0.0
     measlog = { }
 
-    # Scheme setup
-    scheme = FishSolver()
-    scheme.solver_type = ["godunov", "spectral"][0]
-    scheme.reconstruction = "plm"
-    scheme.riemann_solver = "hllc"
-    scheme.shenzha10_param = 100.0
-    scheme.smoothness_indicator = ["jiangshu96", "borges08", "shenzha10"][2]
-
     # Plotting options
-    plot_fields = problem.plot_fields
-    plot_interactive = False
-    plot_initial = False
-    plot_final = True
-    plot = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
-
-    # Runtime options
-    problem.parallel = False
+    if not plot.fields:
+        plot.fields = problem.plot_fields
+    plot.func = [plot1d, plot2d, plot3d][len(problem.resolution) - 1]
 
     if problem.parallel:
         from Mara.parallel import ParallelSimulation
@@ -62,17 +44,17 @@ def main():
         mara = MaraEvolutionOperator(problem, scheme)
     mara.initial_model(problem.pinit, problem.ginit)
 
-    if plot_interactive:
+    if plot.interactive:
         import matplotlib.pyplot as plt
         plt.ion()
-        lines = plot(mara, plot_fields, show=False)
+        lines = plot.func(mara, plot.fields, show=False)
 
-    if plot_initial and not problem.parallel:
-        plot(mara, plot_fields, show=False, label='start')
+    if plot.initial and not problem.parallel:
+        plot.func(mara, plot.fields, show=False, label='start')
 
     while problem.keep_running(status):
-        if plot_interactive and not problem.parallel:
-            for f in plot_fields:
+        if plot.interactive and not problem.parallel:
+            for f in plot.fields:
                 lines[f].set_ydata(mara.fields[f])
             plt.draw()
 
@@ -113,10 +95,34 @@ def main():
     print "\n"
 
     mara.set_boundary()
-    if plot_final and not problem.parallel:
-        plot(mara, plot_fields, show=True, label='end')
+    if plot.final and not problem.parallel:
+        plot.func(mara, plot.fields, show=True, label='end')
 
 
 
 if __name__ == "__main__":
-    main()
+    parser = optparse.OptionParser()
+    opts, args = parser.parse_args()
+
+    problem_cfg = { }
+    scheme = FishSolver()
+    plot = PlottingOptions()
+
+    try:
+        runparam = imp.load_source("runparam", args[0])
+
+        for k,v in getattr(runparam, 'problem_cfg', { }).items():
+            problem_cfg[k] = v
+
+        for k,v in getattr(runparam, 'scheme_cfg', { }).items():
+            setattr(scheme, k, v)
+
+        for k,v in getattr(runparam, 'plotting_cfg', { }).items():
+            setattr(plot, k, v)
+
+    except IndexError: # no args[0]
+        pass
+
+    problem_class = problems.get_problem_class()
+    problem = problem_class(**problem_cfg)
+    main(problem, scheme, plot)

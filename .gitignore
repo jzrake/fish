@@ -1,7 +1,11 @@
-src/*.o
+
+/src/*.o
+/Mara/*.pyc
 /examples/euler
 /tests/testfish
 /tests/testfluids
 /build/*
 /lib/*
-
+/data/*
+/Mara/capis.c
+/Mara/capis.so
