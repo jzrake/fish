@@ -33,6 +33,17 @@ class TestProblem(object):
     def keep_running(self, status):
         return status.time_current < self.tfinal
 
+    def __setattr__(self, k, v):
+        """
+        Allow setting list attributes with a comma-separated string
+        """
+        if hasattr(self, k):
+            if type(getattr(self, k)) is list:
+                tp = type(getattr(self, k)[0])
+                if type(v) is str:
+                    v = [tp(vi) for vi in v.split(',')]
+        super(TestProblem, self).__setattr__(k, v)
+
 
 class TwoStateProblem(TestProblem):
     __metaclass__ = init_options

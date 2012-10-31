@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 
 import optparse
 import imp
@@ -18,7 +19,6 @@ class PlottingOptions:
     initial     = False
     final       = False
     fields      = None
-
 
 def main(problem, scheme, plot):
     # Status setup
@@ -112,18 +112,20 @@ if __name__ == "__main__":
     args = [a for a in sys.argv if not a.startswith('-') and a != __file__]
 
     def add_option(g, k, v):
+        k = k.replace('_', '-')
         if type(v) in [int, float, str]:
             g.add_option('--'+k, default=v, metavar=v, type=type(v))
         elif type(v) is bool:
             if v:
-                g.add_option('--no-'+k, action='store_false', metavar=v)
+                g.add_option('--no-'+k, default=True, action='store_false',
+                             metavar=v)
             else:
-                g.add_option('--'+k, action='store_true', metavar=v)
-        """
+                g.add_option('--'+k, default=False, action='store_true',
+                             metavar=v)
         elif type(v) is list:
-            if type(v[0]) is str:
-                g.add_option('--'+k, default=','.join(v), metavar=','.join(v))
-                """
+            v = [str(vi) for vi in v]
+            g.add_option('--'+k, default=','.join(v), metavar=','.join(v))
+
     if len(args) > 0:
         runparam = imp.load_source("runparam", args[0])
     else:
