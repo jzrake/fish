@@ -74,7 +74,7 @@ def main(problem, scheme, plot):
 
         status.message = "%05d(%d): t=%5.4f dt=%5.4e %5.1fkz/s %3.2fus/(z*Nq)" % (
             status.iteration, 0, status.time_current, dt,
-            (mara.fluid.size / wall_step) * 1e-3,
+            (mara.fluid.size / (wall_step + 1e-12)) * 1e-3,
             (wall_step / (mara.fluid.size*5)) * 1e6)
 
         if status.time_current - status.chkpt_last > status.chkpt_interval:
@@ -109,6 +109,7 @@ if __name__ == "__main__":
 
     parser.add_option("--dry-run", action="store_true",
                       help="just print run configuation and exit")
+    args = [a for a in sys.argv if not a.startswith('-') and a != __file__]
 
     def add_option(g, k, v):
         if type(v) in [int, float, str]:
@@ -123,8 +124,8 @@ if __name__ == "__main__":
             if type(v[0]) is str:
                 g.add_option('--'+k, default=','.join(v), metavar=','.join(v))
                 """
-    if len(sys.argv) > 1:
-        runparam = imp.load_source("runparam", sys.argv[1])
+    if len(args) > 0:
+        runparam = imp.load_source("runparam", args[0])
     else:
         runparam = imp.new_module("runparam")
 
