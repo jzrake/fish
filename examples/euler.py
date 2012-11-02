@@ -20,6 +20,7 @@ class PlottingOptions:
     final       = False
     fields      = None
 
+
 def main(problem, scheme, plot):
     # Status setup
     status = SimulationStatus()
@@ -29,7 +30,7 @@ def main(problem, scheme, plot):
     status.time_current = 0.0
     status.chkpt_number = 0
     status.chkpt_last = 0.0
-    status.chkpt_interval = 0.1
+    status.chkpt_interval = problem.cpi
     status.clock_start = time.clock()
     status.accum_wall = 0.0
     measlog = { }
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     print "run configuration:"
     print "------------------"
     print "\n  problem settings:"
-    for k,v in problem_cfg.items():
+    for k,v in [('problem name', problem_cls.__name__)] + problem_cfg.items():
         print "    %s: %s" % (k, v)
     print "\n  scheme settings:"
     for k,v in scheme_cfg.items():

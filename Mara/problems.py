@@ -14,6 +14,7 @@ class TestProblem(object):
     plot_fields = ['rho', 'pre', 'vx']
     parallel = False
     CFL = 0.3
+    cpi = 1.0 # checkpoint interval
 
     def __init__(self, **kwargs):
         for k,v in kwargs.iteritems():
@@ -238,6 +239,26 @@ class PeriodicDensityWave(TestProblem):
 
     def ginit(self, x, y, z):
         return [0.0, 0.0, 0.0, 0.0]
+
+    def build_boundary(self, mara):
+        return boundary.Periodic()
+
+
+class DrivenTurbulence1d(TestProblem):
+    __metaclass__ = init_options
+    fluid = 'nrhyd'
+    gamma = 1.4
+    tfinal = 1.0
+    resolution = [128]
+    plot_fields = ['rho', 'pre', 'vx']
+    def __init__(self, *args, **kwargs):
+        super(DrivenTurbulence1d, self).__init__(*args, **kwargs)
+        self.driving = driving.DrivingModule1d()
+        if len(self.resolution) != 1:
+            raise ValueError("problem needs a 1d domain")
+
+    def pinit(self, x, y, z):
+        return [1.0, 1.0, 0.0, 0.0, 0.0]
 
     def build_boundary(self, mara):
         return boundary.Periodic()

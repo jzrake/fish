@@ -3,6 +3,26 @@ import numpy as np
 from numpy.fft import *
 
 
+class DrivingModule1d(object):
+    def __init__(self):
+        self._calls = 0
+
+    def advance(self, dt):
+        pass
+
+    def drive(self, mara, dt):
+        """
+        Modifies the primitives according to the acceleration field F.
+        """
+        self._calls += 1
+        if self._calls % 1 == 0 or not hasattr(self, '_F'):
+            X, Y, Z = mara.coordinate_grid()
+            phases = np.random.rand(8)
+            self._F = np.sum(np.array([np.sin(2*n*np.pi*(X[:,0,0] + p)) for n,p in
+                                       enumerate(phases)]), axis=0) * 0.01
+        mara.fluid.primitive[...,2] += self._F * dt
+
+
 class DrivingModule2d(object):
     """
     Utilizes the gaussfield C++ Python extension to create serializable Gauss

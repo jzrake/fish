@@ -151,9 +151,8 @@ class MaraEvolutionOperator(object):
         self.from_conserved(U1)
 
         try:
-            if len(self.shape) in [2, 3]:
-                self.driving.advance(dt)
-                self.driving.drive(self, dt)
+            self.driving.advance(dt)
+            self.driving.drive(self, dt)
         except AttributeError:
             # no driving module
             pass
